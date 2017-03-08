@@ -149,7 +149,7 @@ define thread_vminfo_base
 	printf "SIZE(pt_regs)=%ld\n", sizeof(struct pt_regs)
 end
 document thread_vminfo_base
-	Dump information required by kdump-tool to create a gdb thread
+	Dump information required by kdump-elftool to create a gdb thread
 	per kernel thread instead of the default gdb thread per CPU.
 	The vmlinux (with debugging) for the file must be loaded, but
 	the kernel dump is not required.
@@ -162,7 +162,7 @@ define thread_vminfo_mips
 	printf "SYMBOL(resume)=%lx\n", resume
 end
 document thread_vminfo_mips
-	Dump information required by kdump-tool to create a gdb thread
+	Dump information required by kdump-elftool to create a gdb thread
 	per kernel thread instead of the default gdb thread per CPU.
 	This is the MIPS version.  See thread_vminfo_base for more
 	details.
@@ -176,7 +176,7 @@ define thread_vminfo_x86_64
 	printf "SIZE(context_switch_frame)=1\n"
 end
 document thread_vminfo_x86_64
-	Dump information required by kdump-tool to create a gdb thread
+	Dump information required by kdump-elftool to create a gdb thread
 	per kernel thread instead of the default gdb thread per CPU.
 	This is the MIPS version.  See thread_vminfo_base for more
 	details.
@@ -192,7 +192,7 @@ define thread_vminfo_arm
 	printf "SYMBOL(__switch_to)=%lx\n", __switch_to
 end
 document thread_vminfo_arm
-	Dump information required by kdump-tool to create a gdb thread
+	Dump information required by kdump-elftool to create a gdb thread
 	per kernel thread instead of the default gdb thread per CPU.
 	This is the ARM version.  See thread_vminfo_base for more
 	details.
@@ -204,7 +204,7 @@ define thread_vminfo_i386
 	printf "OFFSET(thread_struct.ip)=%ld\n", &((struct thread_struct *) 0)->ip
 end
 document thread_vminfo_i386
-	Dump information required by kdump-tool to create a gdb thread
+	Dump information required by kdump-elftool to create a gdb thread
 	per kernel thread instead of the default gdb thread per CPU.
 	This is the i386 version.  See thread_vminfo_base for more
 	details.

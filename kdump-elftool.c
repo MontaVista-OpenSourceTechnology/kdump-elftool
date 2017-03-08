@@ -1,5 +1,5 @@
 /*
- * kdump-tool.c
+ * kdump-elftool.c
  *
  * Tool for extracting and handling coredumps
  *
@@ -32,7 +32,7 @@
  */
 
 /* Must be first */
-#include "kdump-tool.h"
+#include "kdump-elftool.h"
 
 #include <stdio.h>
 #include <stdlib.h>

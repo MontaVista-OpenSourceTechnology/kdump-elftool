@@ -137,7 +137,7 @@
  * all theoretical at this point.
  */
 
-#include "kdump-tool.h"
+#include "kdump-elftool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

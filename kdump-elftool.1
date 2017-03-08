@@ -1,10 +1,10 @@
-.TH kdump-tool 1 06/02/01  "Kdump dump handling tool"
+.TH kdump-elftool 1 06/02/01  "Kdump dump handling tool"
 
 .SH NAME
-kdump-tool \- Kdump dump handling tool
+kdump-elftool \- Kdump dump handling tool
 
 .SH SYNOPSIS
-.B kdump-tool
+.B kdump-elftool
 [\-\-help] topelf [\--help]
 [\-\-oldmem|\-i <oldmem>]
 [\-\-outfile|-o <output file>]
@@ -14,7 +14,7 @@ kdump-tool \- Kdump dump handling tool
 [\-\-extravminfo|-e <vminfofile>]
 [\-\-debug|-d]
 
-.B kdump-tool
+.B kdump-elftool
 [\-\-help] tovelf [\--help]
 [\-\-infile|\-i <oldmem or pelf>]
 [\-\-outfile|-o <output file>]
@@ -28,17 +28,17 @@ kdump-tool \- Kdump dump handling tool
 [\-\-procthreads|-p]
 [\-\-debug|-d]
 
-.B kdump-tool
+.B kdump-elftool
 [\-\-help] addrandoff [\--help]
 [\-\-vmcore|-v <vmcore>]
 [\-\-vmlinux|-m <vmlinux>]
 [\-\-extravminfo|-e <vminfofile>]
 
-.B kdump-tool
+.B kdump-elftool
 [\-\-help] makedyn [\--help]
 <vmlinux> [<vmlinux> [...]]
 
-.B kdump-tool
+.B kdump-elftool
 [\-\-help] dumpmem [\--help]
 [\-\-infile|\-i <oldmem or pelf>]
 [\-\-outfile|-o <output file>]
@@ -48,7 +48,7 @@ kdump-tool \- Kdump dump handling tool
 [\-\-extravminfo|-e <vminfofile>]
 <address> <size>
 
-.B kdump-tool
+.B kdump-elftool
 [\-\-help] virttophys [\--help]
 [\-\-infile|\-i <oldmem or pelf>]
 [\-\-vmcore|-v <vmcore>]
@@ -60,7 +60,7 @@ kdump-tool \- Kdump dump handling tool
 
 .SH DESCRIPTION
 The
-.BR kdump-tool
+.BR kdump-elftool
 program extracts kernel coredumps from the target and processes those
 coredumps into something gdb can understand.
 .PP
@@ -74,24 +74,24 @@ and the data is pulled from there.
 .BR RATONALE
 for why this coredump is not sufficient.)
 
-.BR kdump-tool
+.BR kdump-elftool
 deals with two other types of files, both elf files.  Physical memory
 elf files (pelf) and virtual memory elf files (velf).  A pelf file
 holds a physical memory coredump, basically what comes out of
 /proc/vmcore, but with all the unnecessary pages removed.  Note that
-.BR kdump-tool
+.BR kdump-elftool
 will get the physical memory ranges for the old kernel out of
 /proc/vmcore, if available, and only store the necessary ranges.
 
 Note that you can just copy /proc/vmcore and use that as a pelf file
-if you don't want to have kdump-tool on the target.  But it will
+if you don't want to have kdump-elftool on the target.  But it will
 contain all of memory, so it will be a very large file.
 
 A velf file holds a virtual memory coredump, this is in a format that
 gdb can load load and use.  gdb needs the virtual kernel addresses to
 work.
 
-.BR "kdump-tool topelf -o <pelf file>"
+.BR "kdump-elftool topelf -o <pelf file>"
 will process /proc/vmcore into a pelf file.  This is
 generally preferred on a target system, pelf files are usually smaller
 than velf files and they are quicker to process.  Plus a velf file may
@@ -99,10 +99,10 @@ not have all of physical memory, in case you are in a desperate
 situation and need to get to userland memory.  Note that the output
 will go to standard output if you don't specify -o.
 
-.BR "kdump-tool tovelf -i <pelf file> -o <velf file>"
+.BR "kdump-elftool tovelf -i <pelf file> -o <velf file>"
 will process the pelf file into a velf file.
 
-.BR "kdump-tool tovelf -I oldmem -o <velf file>"
+.BR "kdump-elftool tovelf -I oldmem -o <velf file>"
 will process /proc/vmcore directly into a velf file.
 
 For
@@ -117,7 +117,7 @@ option to the
 .BR tovelf
 subcommand will do this, or you can add it later to an existing virtual
 memory coredump with the
-.BR "kdump-tool addrandoff -m <vmlinux> -v <vmcore>"
+.BR "kdump-elftool addrandoff -m <vmlinux> -v <vmcore>"
 command.
 
 As an additional problem for debugging kernels with a random base address,
@@ -127,10 +127,10 @@ compile for most architectures is marked as a regular executable, but
 .BR gdb
 requires that it be a relocatable executable to handle the load offset.
 The command
-.BR "kdump-tool makedyn <vmlinux>"
+.BR "kdump-elftool makedyn <vmlinux>"
 will convert a vmlinux to a relocatable executable command for you.
 
-.BR kdump-tool
+.BR kdump-elftool
 will also dump ranges of memory from the various input types it
 supports using the
 .BR dumpmem
@@ -138,7 +138,7 @@ subcommand.  The parameters all work as
 before, with the addition of -p, which specifies the address as
 physical.  Otherwise the address is assumed to be virtual.
 
-.BR kdump-tool
+.BR kdump-elftool
 can also convert logical addresses to physical addresses using the
 .BR virttophys
 subcommand.  This only works on physical memory files.
@@ -214,7 +214,7 @@ See "PROCESSES TO GDB THREADS" below for more details.
 .TP
 .I "\-\-debug|-d"
 Dump debug information.  Generally only useful if you are debugging
-kdump-tool itself.
+kdump-elftool itself.
 
 .SH RATIONALE
 Why not just use /proc/vmcore, you ask?  The /proc/vmcore file
@@ -226,10 +226,10 @@ vmemmap, it's almost impossible to use gdb on the standard kernel
 coredump.
 
 .SH PROCESSES TO GDB THREADS
-kdump-tool can convert every kernel process into a thread that gdb
+kdump-elftool can convert every kernel process into a thread that gdb
 can use.  You generally have to use the macro from kdump_gdbinit
 named thread_vminfo to get the extra vminfo file, pass it in to
-kdump-tool with
+kdump-elftool with
 .I \-\-extravminfo <file>
 with that file to get the proper symbols.  Then use the
 .I \-\-procthreads
@@ -242,7 +242,7 @@ for the target, they are smaller and can be easily processed on the host.
 <Convert it to a normal virtual dump.  This is required because if the
  kernel is relocated, you need relocated symbols.>
 
-kdump-tool tovelf -I pelf -i pdump -m vmlinux -o vdump
+kdump-elftool tovelf -I pelf -i pdump -m vmlinux -o vdump
 
 gdb vmlinux vdump
 
@@ -252,7 +252,7 @@ thread_vminfo_<arch>  # <arch> is either mips, arm, or x86_64
 
 <save the output to a file name thread_vminfo and quit gdb>
 
-kdump-tool tovelf -I pelf -i pdump -m vmlinux -o vdump -e thread_vminfo -p
+kdump-elftool tovelf -I pelf -i pdump -m vmlinux -o vdump -e thread_vminfo -p
 
 gdb vmlinux vdump
 .RE

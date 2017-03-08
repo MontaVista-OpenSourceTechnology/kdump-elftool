@@ -1,5 +1,5 @@
-This is kdumptool, a tool for creating usable coredumps from a kernel
-crash.
+This is kdump-elftool, a tool for creating usable coredumps from a
+kernel crash.
 
 You will need to patch your kernel with the patches in
 "kernel-patches" before this will work.  These patches add system
@@ -12,25 +12,25 @@ To use this, use the kexec/kdump instructions to get into a crash dump
 kernel (the kernel that boots from the crashed kernel).  It will have
 /dev/oldmem and /proc/vmcore available.
 
-Run "kdump-tool topelf -o pmcore" and copy pmcore to your system
+Run "kdump-elftool topelf -o pmcore" and copy pmcore to your system
 where you will be doing the analysis.  Or do:
-  kdump-tool topelf | gzip >pmcore.gz
+  kdump-elftool topelf | gzip >pmcore.gz
 to compress it, probably a good idea as it will compress quite well.
 
 Before doing analysis, uncompress it if necessary run:
-  kdump-tool tovelf -i pmcore -o vmcore
+  kdump-elftool tovelf -i pmcore -o vmcore
 to generate the gdb-usable core file.
 
 If your kernel use a randomized base, you need the original vmlinux
-file so kdump-tool can calculate the offsets.  Use the following
+file so kdump-elftool can calculate the offsets.  Use the following
 options to tovelf instead:
-  kdump-tool tovelf -i pmcore -o vmcore -m vmlinux
+  kdump-elftool tovelf -i pmcore -o vmcore -m vmlinux
 Then run:
-  kdump-tool makedyn vmlinux
+  kdump-elftool makedyn vmlinux
 to convert the vmlinux file into a relocatable executable.  Then gdb
 will be able to debug it without issues. If you forget to add the -m
 option to running tovelf, all is not lost.  You can do:
-  kdump-tool addrandoff -m vmlinux -v vmcore
+  kdump-elftool addrandoff -m vmlinux -v vmcore
 to add the information to an existing vmcore file.  This will replace
 any existing offset information.
 
@@ -40,7 +40,7 @@ Then do "gdb vmlinux vmcore".  For more information, see:
 By default, each CPU will appear as a thread in gdb, so you will be
 able to see the state of each running thread, backtrace it, look at
 local variables, etc.  For architectures that support it, you can tell
-kdump-tool to create a thread for each process/thread running in the
+kdump-elftool to create a thread for each process/thread running in the
 system, so you can backtrace and look at local variables for processes
 that were not running when the system crashed.  The procedure for this
 is somewhat complex, see the man page for details on how to do this.

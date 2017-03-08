@@ -31,7 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "kdump-tool.h"
+#include "kdump-elftool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
