@@ -209,10 +209,3 @@ document thread_vminfo_i386
 	This is the i386 version.  See thread_vminfo_base for more
 	details.
 end
-
-define kvtop 
-	# TODO kvtop isn't implemented for mips now.
-	set $ret = (ulong)$arg0
-end
-
-
