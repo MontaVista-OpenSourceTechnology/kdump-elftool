@@ -138,7 +138,7 @@ document lsmod
 end
 
 define thread_vminfo_base
-	printf "SYMBOL(init_task)=%lx\n", &init_task
+	printf "SYMBOL(init_task)=%p\n", &init_task
 	printf "OFFSET(task_struct.stack)=%ld\n", &((struct task_struct *) 0)->stack
 	printf "OFFSET(task_struct.tasks)=%ld\n", &((struct task_struct *) 0)->tasks
 	printf "OFFSET(task_struct.thread_node)=%ld\n", &((struct task_struct *) 0)->thread_node
