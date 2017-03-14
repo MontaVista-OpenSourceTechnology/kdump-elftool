@@ -409,8 +409,11 @@ handle_vminfo_notes(struct elfc *elf, struct vmcoreinfo_data *vals,
 		extra_vminfo_len = strlen(extra_vminfo);
 	rv = handle_vmcoreinfo(extra_vminfo, extra_vminfo_len,
 			       vmcoreinfo_scanner, vals);
-	if (rv == -1)
+	if (rv == -1) {
+		pr_err("Error handling extra vmcoreinfo file.  Make sure "
+		       "there are no empty lines, especially at the end.\n");
 		return rv;
+	}
 	return scan_for_vminfo_notes(elf, vmcoreinfo_scanner, vals);
 }
 
@@ -1280,11 +1283,13 @@ read_page_maps(struct kdt_data *d)
 		VMCI_LENGTH(node_data),
 		{ NULL }
 	};
-	int rv = -1;
+	int rv;
 
 	list_init(&d->page_maps);
 
-	handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	rv = handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	if (rv)
+		return rv;
 
 	d->pagedata = malloc(d->page_size);
 	if (!d->pagedata) {
@@ -1865,7 +1870,9 @@ topelf(int argc, char *argv[])
 	if (!d->elf)
 		goto out_err;
 
-	handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	rv = handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	if (rv)
+		goto out_err;
 
 	rv = process_base_vmci(d, vmci, d->elf);
 	if (rv)
@@ -2214,8 +2221,12 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 	uint64_t task_addr, init_task_addr;
 	long count = 0;
 	unsigned int i;
+	int rv;
 
-	handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	rv = handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	if (rv)
+		return rv;
+
 	for (i = KV_REQ; vmci[i].name; i++) {
 		if (!vmci[i].found) {
 			pr_err("vmcoreinfo value %s not found.  You need to "
@@ -2547,7 +2558,9 @@ tovelf(int argc, char *argv[])
 		fd = -1;
 	}
 
-	handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	rv = handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	if (rv)
+		goto out_err;
 
 	rv = process_base_vmci(d, vmci, d->elf);
 	if (rv)
@@ -2754,7 +2767,10 @@ addrandomoffset(int argc, char *argv[])
 		goto out;
 	}
 
-	handle_vminfo_notes(velf, vmci, extra_vminfo);
+	rv = handle_vminfo_notes(velf, vmci, extra_vminfo);
+	if (rv)
+		goto out;
+
 	if (!vmci[VMCI_SYMBOL__stext].found) {
 		pr_err("No _stext symbol found in %ss notes\n",
 			vmcore);
@@ -3291,7 +3307,9 @@ virttophys(int argc, char *argv[])
 		fd = -1;
 	}
 
-	handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	rv = handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
+	if (rv)
+		goto out_err;
 
 	rv = process_base_vmci(d, vmci, d->elf);
 	if (rv)
