@@ -45,6 +45,7 @@
 #include <gelf.h>
 #include <stdarg.h>
 
+#include "config.h"
 #include "list.h"
 #include "elfc.h"
 
@@ -3427,6 +3428,7 @@ main(int argc, char *argv[])
 	int i;
 	static struct option longopts[] = {
 		{ "help",	no_argument,	NULL, 'h' },
+		{ "version",	no_argument,	NULL, 'v' },
 		{ NULL }
 	};
 
@@ -3435,12 +3437,15 @@ main(int argc, char *argv[])
 
 	for (;;) {
 		int curr_optind = optind;
-		int c = getopt_long(argc, argv, "+h", longopts, NULL);
+		int c = getopt_long(argc, argv, "+hv", longopts, NULL);
 		if (c == -1)
 			break;
 		switch (c) {
 		case 'h':
 			help();
+			exit(0);
+		case 'v':
+			printf("kdump-elftool version %s\n", VERSION);
 			exit(0);
 		case '?':
 			usage("Unknown option: %s\n", argv[curr_optind]);
