@@ -1,0 +1,86 @@
+From e6d8002773011e8383c800965dd994b245163d50 Mon Sep 17 00:00:00 2001
+From: Corey Minyard <cminyard@mvista.com>
+Date: Wed, 22 Feb 2017 15:48:12 -0600
+Subject: [PATCH 6/6] x86: Provide context switch point for kdump process to
+ kernel threads
+
+In order to properly handle generating gdb kernel threads for each
+kernel process, you must know the context switch point to tell gdb
+what the instruction pointer is.  So create a symbol and export
+in in the VMCOREINFO.
+
+Signed-off-by: Corey Minyard <cminyard@mvista.com>
+---
+ arch/x86/entry/entry_32.S          | 4 ++++
+ arch/x86/entry/entry_64.S          | 4 ++++
+ arch/x86/kernel/machine_kexec_32.c | 3 +++
+ arch/x86/kernel/machine_kexec_64.c | 3 +++
+ 4 files changed, 14 insertions(+)
+
+diff --git a/arch/x86/entry/entry_32.S b/arch/x86/entry/entry_32.S
+index 4a33895..2c4646b 100644
+--- a/arch/x86/entry/entry_32.S
++++ b/arch/x86/entry/entry_32.S
+@@ -219,6 +219,10 @@ ENTRY(__switch_to_asm)
+ 	pushl	%edi
+ 	pushl	%esi
+ 
++	/* Mark where we "sleep" for tracebacks in kdump. */
++	__thread_sleep_point:
++	.globl __thread_sleep_point
++
+ 	/* switch stack */
+ 	movl	%esp, TASK_threadsp(%eax)
+ 	movl	TASK_threadsp(%edx), %esp
+diff --git a/arch/x86/entry/entry_64.S b/arch/x86/entry/entry_64.S
+index 28401f8..792f4c7f 100644
+--- a/arch/x86/entry/entry_64.S
++++ b/arch/x86/entry/entry_64.S
+@@ -386,6 +386,10 @@ ENTRY(__switch_to_asm)
+ 	pushq	%r14
+ 	pushq	%r15
+ 
++	/* Mark where we "sleep" for tracebacks in kdump. */
++	__thread_sleep_point:
++	.globl __thread_sleep_point
++
+ 	/* switch stack */
+ 	movq	%rsp, TASK_threadsp(%rdi)
+ 	movq	TASK_threadsp(%rsi), %rsp
+diff --git a/arch/x86/kernel/machine_kexec_32.c b/arch/x86/kernel/machine_kexec_32.c
+index 469b23d..97c0aed 100644
+--- a/arch/x86/kernel/machine_kexec_32.c
++++ b/arch/x86/kernel/machine_kexec_32.c
+@@ -260,8 +260,11 @@ void machine_kexec(struct kimage *image)
+ 	__ftrace_enabled_restore(save_ftrace_enabled);
+ }
+ 
++extern void __thread_sleep_point(void);
++
+ void arch_crash_save_vmcoreinfo(void)
+ {
++	VMCOREINFO_SYMBOL(__thread_sleep_point);
+ #ifdef CONFIG_NUMA
+ 	VMCOREINFO_SYMBOL(node_data);
+ 	VMCOREINFO_LENGTH(node_data, MAX_NUMNODES);
+diff --git a/arch/x86/kernel/machine_kexec_64.c b/arch/x86/kernel/machine_kexec_64.c
+index 8c1f218..ffdd9fe 100644
+--- a/arch/x86/kernel/machine_kexec_64.c
++++ b/arch/x86/kernel/machine_kexec_64.c
+@@ -326,10 +326,13 @@ void machine_kexec(struct kimage *image)
+ 	__ftrace_enabled_restore(save_ftrace_enabled);
+ }
+ 
++extern void __thread_sleep_point(void);
++
+ void arch_crash_save_vmcoreinfo(void)
+ {
+ 	VMCOREINFO_SYMBOL(phys_base);
+ 	VMCOREINFO_SYMBOL(init_level4_pgt);
++	VMCOREINFO_SYMBOL(__thread_sleep_point);
+ 
+ #ifdef CONFIG_NUMA
+ 	VMCOREINFO_SYMBOL(node_data);
+-- 
+2.7.4
+
