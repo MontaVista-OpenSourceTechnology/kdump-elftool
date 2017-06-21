@@ -264,11 +264,13 @@ Note that you do
 get the userland traceback here.  You get the
 kernel side of the traceback.
 
-.SH PROCESSES TO GDB THREADS EXTRAS FOR X86
-Unfortuantely, x86 doesn't provide all the information you need to
-properly generate threads for each process.  Two additional pieces
-of information are required: The context switch point and the value
-of the BP register at context switch.
+.SH PROCESSES TO GDB THREADS EXTRAS FOR X86_64
+Unfortuantely, x86_64 kernels before 4.9 do not provide all the
+information you need to properly generate threads for each process.
+Two additional pieces of information are required: The context switch
+point and the value of the BP register at context switch.
+
+Kernels 4.9 and later do not need this extra handling.
 
 The kernel does not store the value of the BP register at context
 switch, and that would slow down context switches a little so it's

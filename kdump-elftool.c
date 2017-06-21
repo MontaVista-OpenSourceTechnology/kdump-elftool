@@ -172,6 +172,10 @@ enum base_vmci {
 	VMCI_PAGESIZE
 };
 
+char *osrelease;
+int os_major_release;
+int os_minor_release;
+
 #define _VMCI_CHECK_FOUND(vmci, fullname)				\
 	({if (!vmci[VMCI_ ## fullname].found) {		\
 		pr_err("Error: %s not in vmcore\n", #fullname); \
@@ -184,6 +188,26 @@ int process_base_vmci(struct kdt_data *d, struct vmcoreinfo_data *vmci,
 		      struct elfc *elf)
 {
 	int rv;
+	char *str, *end;
+
+	if (!osrelease) {
+		pr_err("Error: OSRELEASE not in vmcore\n");
+		return -1;
+	}
+	str = osrelease;
+	os_major_release = strtoul(str, &end, 10);
+	if (end == str || *end != '.') {
+		pr_err("Error: OSRELEASE major version not valid: %s\n",
+			osrelease);
+		return -1;
+	}
+	str = end + 1;
+	os_minor_release = strtoul(str, &end, 10);
+	if (end == str || *end != '.') {
+		pr_err("Error: OSRELEASE minor version not valid: %s\n",
+			osrelease);
+		return -1;
+	}
 
 	VMCI_CHECK_FOUND(vmci, SYMBOL, _stext);
 
@@ -364,6 +388,22 @@ vmcoreinfo_scanner(const char *nameptr, int namelen,
 {
 	struct vmcoreinfo_data *vals = userdata;
 	int i;
+
+	if (namelen == strlen("OSRELEASE") &&
+	    strncmp(nameptr, "OSRELEASE", namelen) == 0) {
+		if (osrelease)
+			return 0;
+
+		osrelease = malloc(vallen + 1);
+		if (!osrelease) {
+			pr_err("Out of memory allocation OSRELEASE data\n");
+		} else {
+			memcpy(osrelease, valptr, vallen);
+			osrelease[vallen] = '\0';
+		}
+
+		return 0;
+	}
 
 	for (i = 0; vals[i].name; i++) {
 		char *name = vals[i].name;

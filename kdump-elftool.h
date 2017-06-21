@@ -64,6 +64,13 @@ int copy_elf_notes(struct elfc *out, struct elfc *in,
 		   void *userdata);
 
 /*
+ * Extracted information about which OS version we are running.
+ */
+char *osrelease;
+int os_major_release;
+int os_minor_release;
+
+/*
  * Scan the vmcoreinfo in the notes looking for values.  A value
  * matching "name" will be hunted for.  If found, "found" will be set
  * to true and the value will be extracted using "base" (like base 10,

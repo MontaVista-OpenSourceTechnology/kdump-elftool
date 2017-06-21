@@ -253,25 +253,57 @@ x86_64_task_ptregs(struct kdt_data *d, GElf_Addr task, void *regs)
 	struct x86_64_pt_regs *pt_regs = regs;
 	int rv;
 
-	if (!d->thread_sp_found || !d->x86___thread_sleep_point_found ||
-	    !d->x86_context_switch_frame_size_found) {
-		pr_err("x86-specific thread symbols not found, ptregs cannot "
+	if (!d->thread_sp_found) {
+		pr_err("x86-specific thread SP offset not found, ptregs cannot "
 		       "be extracted.\n");
 		return -1;
 	}
-	if (d->x86_context_switch_frame_size == 1) {
-		pr_err("You must set SIZE(context_switch_frame) in your "
-		       "extracted symbols.  See the man page for details.\n");
-		return -1;
-	}
 
-	pt_regs->rip = d->x86___thread_sleep_point;
 	rv = fetch_vaddr64(d, reg + d->thread_sp, &pt_regs->rsp, "thread.sp");
 	if (rv) {
 		pr_err("Unable to fetch SP from task struct\n");
 		return rv;
 	}
-	pt_regs->rbp = pt_regs->rsp - d->x86_context_switch_frame_size;
+
+	if (os_major_release < 4 ||
+	    (os_major_release == 4 && os_minor_release < 9)) {
+		if (!d->x86___thread_sleep_point_found ||
+		    !d->x86_context_switch_frame_size_found) {
+			pr_err("x86-specific thread symbols not found, ptregs "
+			       "cannot be extracted.\n");
+			return -1;
+		}
+
+		if (d->x86_context_switch_frame_size == 1) {
+			pr_err("You must set SIZE(context_switch_frame) in "
+			       "your extracted symbols.  See the man page "
+			       "for details.\n");
+			return -1;
+		}
+
+		pt_regs->rbp = pt_regs->rsp - d->x86_context_switch_frame_size;
+		pt_regs->rip = d->x86___thread_sleep_point;
+	} else {
+		/* Context switch was redone in 4.9. */
+		/* Pushed BP register (frame pointer) is at this address. */
+		GElf_Addr fr = pt_regs->rsp + (5 * 8);
+
+		/* We back out of __switch_to_asm to it's parent. */
+		rv = fetch_vaddr64(d, fr, &pt_regs->rbp, "thread.bp");
+		if (rv) {
+			pr_err("Unable to fetch BP from stack\n");
+			return rv;
+		}
+
+		rv = fetch_vaddr64(d, fr + 8, &pt_regs->rip, "thread.ip");
+		if (rv) {
+			pr_err("Unable to fetch ip from stack\n");
+			return rv;
+		}
+
+		/* 6 pushes in __switch_to_asm, plus the call. */
+		pt_regs->rsp += (7 * 8);
+	}
 
 	/* We should only need the EIP, EBP and ESP. */
 
