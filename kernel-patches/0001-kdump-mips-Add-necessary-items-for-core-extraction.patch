@@ -1,7 +1,7 @@
-From 37a79f125386ac688dbb591cb92b5b16969ea0be Mon Sep 17 00:00:00 2001
+From 654a604d3e6973e764ceace08881276da7ca2b56 Mon Sep 17 00:00:00 2001
 From: Corey Minyard <cminyard@mvista.com>
 Date: Sat, 1 Feb 2014 01:10:28 -0600
-Subject: [PATCH 3/6] kdump mips: Add necessary items for core extraction
+Subject: [PATCH] kdump mips: Add necessary items for core extraction
 
 MIPS is quite complicated dealing with pages, there are lots of options
 and lots of values that are dynamically calculated.  We need to pass those
@@ -14,7 +14,7 @@ Signed-off-by: Corey Minyard <cminyard@mvista.com>
  2 files changed, 33 insertions(+)
 
 diff --git a/arch/mips/kernel/machine_kexec.c b/arch/mips/kernel/machine_kexec.c
-index 5972520..176eb66 100644
+index 992e184..0fbe13d 100644
 --- a/arch/mips/kernel/machine_kexec.c
 +++ b/arch/mips/kernel/machine_kexec.c
 @@ -12,6 +12,7 @@
@@ -25,7 +25,7 @@ index 5972520..176eb66 100644
  
  extern const unsigned char relocate_new_kernel[];
  extern const size_t relocate_new_kernel_size;
-@@ -113,3 +114,32 @@ machine_kexec(struct kimage *image)
+@@ -108,3 +109,32 @@ machine_kexec(struct kimage *image)
  #endif
  	((noretfun_t) reboot_code_buffer)();
  }
@@ -59,13 +59,13 @@ index 5972520..176eb66 100644
 +	VMCOREINFO_NUMBER(_PFN_SHIFT);
 +}
 diff --git a/include/linux/kexec.h b/include/linux/kexec.h
-index 406c33d..157c7fe 100644
+index a756419..e1267a4 100644
 --- a/include/linux/kexec.h
 +++ b/include/linux/kexec.h
-@@ -265,6 +265,9 @@ phys_addr_t paddr_vmcoreinfo_note(void);
- 	vmcoreinfo_append_str("VMALLOC_START=%lx\n", (unsigned long)value)
- #define VMCOREINFO_VMEMMAP_START(value) \
- 	vmcoreinfo_append_str("VMEMMAP_START=%lx\n", (unsigned long)value)
+@@ -161,6 +161,9 @@ unsigned long paddr_vmcoreinfo_note(void);
+ 	vmcoreinfo_append_str("NUMBER(%s)=%ld\n", #name, (long)name)
+ #define VMCOREINFO_CONFIG(name) \
+ 	vmcoreinfo_append_str("CONFIG_%s=y\n", #name)
 +#define VMCOREINFO_ADDRESS(name) \
 +	vmcoreinfo_append_str("ADDRESS(%s)=%llx\n", #name, \
 +			      (unsigned long long) name)
@@ -73,5 +73,5 @@ index 406c33d..157c7fe 100644
  extern struct kimage *kexec_image;
  extern struct kimage *kexec_crash_image;
 -- 
-2.7.4
+1.8.3.1
 

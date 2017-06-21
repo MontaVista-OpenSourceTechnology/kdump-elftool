@@ -1,7 +1,7 @@
-From c44686e6d25b0bed1f194cee80c6b62df9f65296 Mon Sep 17 00:00:00 2001
+From 05db09230121890e91d57618353d5289401eaad2 Mon Sep 17 00:00:00 2001
 From: Corey Minyard <cminyard@mvista.com>
 Date: Tue, 14 Feb 2017 11:21:00 -0600
-Subject: [PATCH 5/6] mips: Add an option to set up exception frames for gdb
+Subject: [PATCH] mips: Add an option to set up exception frames for gdb
 
 The current kernel exception frames are not understood by gdb, so a
 traceback through an exception or interrupt does not work.  Add an
@@ -11,16 +11,16 @@ frame in Linux userland.
 Signed-off-by: Corey Minyard <cminyard@mvista.com>
 ---
  arch/mips/Kconfig.debug        |  9 +++++++++
- arch/mips/include/asm/ptrace.h | 18 ++++++++++++++++++
- 2 files changed, 27 insertions(+)
+ arch/mips/include/asm/ptrace.h | 19 +++++++++++++++++--
+ 2 files changed, 26 insertions(+), 2 deletions(-)
 
 diff --git a/arch/mips/Kconfig.debug b/arch/mips/Kconfig.debug
-index 9b0c35c..8ee71bd 100644
+index 82b4f3e..66dc6a4 100644
 --- a/arch/mips/Kconfig.debug
 +++ b/arch/mips/Kconfig.debug
-@@ -96,6 +96,15 @@ config CAVIUM_GDB
- 	  kernel using the Cavium Inc. GDB with extended SMP support.
- 	  This is only useful for kernel hackers. If unsure, say N.
+@@ -111,6 +111,15 @@ config RUNTIME_DEBUG
+ 	  arch/mips/include/asm/debug.h for debugging macros.
+ 	  If unsure, say N.
  
 +config GDB_EXCEPTION_FRAME
 +	bool "Make exception/interrupt frames match userspace signal frames"
@@ -35,21 +35,24 @@ index 9b0c35c..8ee71bd 100644
  	bool "Enable compressed kernel support debugging"
  	depends on DEBUG_KERNEL && SYS_SUPPORTS_ZBOOT
 diff --git a/arch/mips/include/asm/ptrace.h b/arch/mips/include/asm/ptrace.h
-index b657861..3756fa0 100644
+index ad16caa..6073f4f 100644
 --- a/arch/mips/include/asm/ptrace.h
 +++ b/arch/mips/include/asm/ptrace.h
-@@ -30,9 +30,25 @@ struct pt_regs {
+@@ -21,13 +21,26 @@
+  * system call/exception. As usual the registers k0/k1 aren't being saved.
+  */
+ struct pt_regs {
+-#ifdef CONFIG_32BIT
++#if defined(CONFIG_32BIT) || defined (CONFIG_GDB_EXCEPTION_FRAME)
  	/* Pad bytes for argument save space on the stack. */
- 	unsigned long pad0[8];
- #endif
-+#ifdef CONFIG_GDB_EXCEPTION_FRAME
+-	unsigned long pad0[6];
 +	/*
-+	 * Used to pad things out so the sigframe matches the 64-bit
++	 * Also used to pad things out so the sigframe matches the 64-bit
 +	 * userspace sigframe to let GDB decode a kdump trace through an
 +	 * exception/interrupt.
 +	 */
 +	u32 pad0[6];
-+#endif
+ #endif
  
  	/* Saved main processor registers. */
  	unsigned long regs[32];
@@ -64,7 +67,7 @@ index b657861..3756fa0 100644
  
  	/* Saved special registers. */
  	unsigned long cp0_status;
-@@ -40,6 +56,8 @@ struct pt_regs {
+@@ -35,6 +48,8 @@ struct pt_regs {
  	unsigned long lo;
  #ifdef CONFIG_CPU_HAS_SMARTMIPS
  	unsigned long acx;
