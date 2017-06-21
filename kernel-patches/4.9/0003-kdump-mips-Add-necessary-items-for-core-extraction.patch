@@ -1,0 +1,77 @@
+From 37a79f125386ac688dbb591cb92b5b16969ea0be Mon Sep 17 00:00:00 2001
+From: Corey Minyard <cminyard@mvista.com>
+Date: Sat, 1 Feb 2014 01:10:28 -0600
+Subject: [PATCH 3/6] kdump mips: Add necessary items for core extraction
+
+MIPS is quite complicated dealing with pages, there are lots of options
+and lots of values that are dynamically calculated.  We need to pass those
+in so a vmcore file can be properly generated from a kdump.
+
+Signed-off-by: Corey Minyard <cminyard@mvista.com>
+---
+ arch/mips/kernel/machine_kexec.c | 30 ++++++++++++++++++++++++++++++
+ include/linux/kexec.h            |  3 +++
+ 2 files changed, 33 insertions(+)
+
+diff --git a/arch/mips/kernel/machine_kexec.c b/arch/mips/kernel/machine_kexec.c
+index 5972520..176eb66 100644
+--- a/arch/mips/kernel/machine_kexec.c
++++ b/arch/mips/kernel/machine_kexec.c
+@@ -12,6 +12,7 @@
+ 
+ #include <asm/cacheflush.h>
+ #include <asm/page.h>
++#include <asm/pgtable.h>
+ 
+ extern const unsigned char relocate_new_kernel[];
+ extern const size_t relocate_new_kernel_size;
+@@ -113,3 +114,32 @@ machine_kexec(struct kimage *image)
+ #endif
+ 	((noretfun_t) reboot_code_buffer)();
+ }
++
++void arch_crash_save_vmcoreinfo(void)
++{
++	VMCOREINFO_NUMBER(PAGE_SHIFT);
++	VMCOREINFO_NUMBER(PGD_ORDER);
++#if defined(CONFIG_32BIT) || !defined(CONFIG_PAGE_SIZE_64KB)
++	VMCOREINFO_NUMBER(PMD_ORDER);
++#endif
++	VMCOREINFO_NUMBER(PTE_ORDER);
++	VMCOREINFO_NUMBER(_PAGE_PRESENT);
++#ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
++	VMCOREINFO_NUMBER(_PAGE_HUGE);
++#endif
++#ifdef CONFIG_64BIT
++#ifdef CONFIG_MAPPED_KERNEL
++	VMCOREINFO_ADDRESS(_text);
++	VMCOREINFO_ADDRESS(_end);
++	VMCOREINFO_ADDRESS(phys_to_kernel_offset);
++#endif
++	VMCOREINFO_ADDRESS(CKSEG0);
++	VMCOREINFO_ADDRESS(CKSSEG);
++#else /* CONFIG_64BIT */
++	VMCOREINFO_ADDRESS(PHYS_OFFSET);
++#endif /* CONFIG_64BIT */
++
++	VMCOREINFO_ADDRESS(PAGE_OFFSET);
++	VMCOREINFO_ADDRESS(IO_BASE);
++	VMCOREINFO_NUMBER(_PFN_SHIFT);
++}
+diff --git a/include/linux/kexec.h b/include/linux/kexec.h
+index 406c33d..157c7fe 100644
+--- a/include/linux/kexec.h
++++ b/include/linux/kexec.h
+@@ -265,6 +265,9 @@ phys_addr_t paddr_vmcoreinfo_note(void);
+ 	vmcoreinfo_append_str("VMALLOC_START=%lx\n", (unsigned long)value)
+ #define VMCOREINFO_VMEMMAP_START(value) \
+ 	vmcoreinfo_append_str("VMEMMAP_START=%lx\n", (unsigned long)value)
++#define VMCOREINFO_ADDRESS(name) \
++	vmcoreinfo_append_str("ADDRESS(%s)=%llx\n", #name, \
++			      (unsigned long long) name)
+ 
+ extern struct kimage *kexec_image;
+ extern struct kimage *kexec_crash_image;
+-- 
+2.7.4
+
