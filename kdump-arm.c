@@ -1,7 +1,7 @@
 /*
- * kdump-mips.c
+ * kdump-arm.c
  *
- * MIPS specific code for handling coredumps
+ * ARM specific code for handling coredumps
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
