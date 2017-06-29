@@ -41,7 +41,6 @@
 
 struct arm_walk_data {
 	struct elfc *pelf;
-	int is_bigendian;
 	uint32_t (*conv32)(void *in);
 };
 
