@@ -882,7 +882,8 @@ mips_arch_setup(struct elfc *pelf, struct kdt_data *d, void **arch_data)
 		VMCI_NUMBER(PTE_ORDER),
 		VMCI_NUMBER(_PAGE_PRESENT),
 		VMCI_NUMBER(_PFN_SHIFT),
-		VMCI_ADDRESS(phys_pgd_ptr)
+		VMCI_ADDRESS(phys_pgd_ptr),
+		{ NULL }
 	};
 	int i, base_shift;
 
