@@ -1181,8 +1181,10 @@ read_sparse_maps(struct kdt_data *d, struct vmcoreinfo_data *vmci, bool extreme)
 
 	rv = fetch_vaddr_data(d, vmci[VMCI_SYMBOL_mem_section].val,
 			      mem_sections_size, mem_sections);
-	if (rv == -1)
+	if (rv == -1) {
+		pr_err("Unable to read mem section\n");
 		goto out_err;
+	}
 
 	for (i = 0; i < d->mem_section_length; i++) {
 		if (extreme) {
@@ -2184,6 +2186,7 @@ enum thread_info_labels {
 	VMCI_SIZE_context_switch_frame, /* For x86_64 */
 	VMCI_OFFSET_thread_info__cpu_context, /* for ARM */
 	VMCI_SYMBOL___switch_to, /* for ARM */
+	VMCI_OFFSET_thread__cpu_context, /* for ARM64 */
 	/* Begin required elements. */
 #define KV_REQ VMCI_SYMBOL_init_task
 	VMCI_SYMBOL_init_task,
@@ -2249,6 +2252,7 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 		VMCI_SIZE(context_switch_frame),
 		VMCI_OFFSET(thread_info, cpu_context),
 		VMCI_SYMBOL(__switch_to),
+		VMCI_OFFSET(thread, cpu_context),
 		VMCI_SYMBOL(init_task),
 		VMCI_OFFSET(task_struct, stack),
 		VMCI_OFFSET(task_struct, tasks),
@@ -2313,6 +2317,11 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 	d->arm___switch_to_found = vmci[VMCI_SYMBOL___switch_to].found;
 	if (d->arm___switch_to_found)
 		d->arm___switch_to = vmci[VMCI_SYMBOL___switch_to].val;
+	d->arm64_thread_cpu_context_found =
+		vmci[VMCI_OFFSET_thread__cpu_context].found;
+	if (d->arm64_thread_cpu_context_found)
+		d->arm64_thread_cpu_context =
+			vmci[VMCI_OFFSET_thread__cpu_context].val;
 
 	init_task_addr = vmci[VMCI_SYMBOL_init_task].val;
 
@@ -3502,6 +3511,7 @@ main(int argc, char *argv[])
 	add_arch(&mips_arch);
 	add_arch(&arm_arch);
 	add_arch(&ppc32_arch);
+	add_arch(&arm64_arch);
 
 	for (i = 0; subcommands[i].name; i++) {
 		if (strcmp(subcommands[i].name, argv[optind]) == 0)

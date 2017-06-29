@@ -198,6 +198,17 @@ document thread_vminfo_arm
 	details.
 end
 
+define thread_vminfo_arm64
+	thread_vminfo_base
+	printf "OFFSET(thread.cpu_context)=%ld\n", &((struct thread_struct *) 0)->cpu_context
+end
+document thread_vminfo_arm
+	Dump information required by kdump-elftool to create a gdb thread
+	per kernel thread instead of the default gdb thread per CPU.
+	This is the ARM64 version.  See thread_vminfo_base for more
+	details.
+end
+
 define thread_vminfo_i386
 	thread_vminfo_base
 	printf "OFFSET(thread_struct.sp)=%ld\n", &((struct thread_struct *) 0)->sp

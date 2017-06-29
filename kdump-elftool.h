@@ -94,6 +94,8 @@ int handle_vminfo_notes(struct elfc *elf, struct vmcoreinfo_data *vals,
 	[VMCI_PAGESIZE] = { "PAGESIZE", 10, 0, 0 }
 #define VMCI_NUMBER(lbl)						\
 	[VMCI_NUMBER_ ## lbl] = { "NUMBER(" #lbl ")", 10, 0, 0 }
+#define VMCI_HEXNUMBER(lbl)						\
+	[VMCI_NUMBER_ ## lbl] = { "NUMBER(" #lbl ")", 16, 0, 0 }
 #define VMCI_SYMBOL(lbl)						\
 	[VMCI_SYMBOL_ ## lbl] = { "SYMBOL(" #lbl ")", 16, 0, 0 }
 #define VMCI_SIZE(lbl)						\
@@ -270,6 +272,8 @@ struct kdt_data {
 	uint64_t arm_thread_info_cpu_context;
 	bool arm___switch_to_found;
 	uint64_t arm___switch_to;
+	bool arm64_thread_cpu_context_found;
+	uint64_t arm64_thread_cpu_context;
 
 	/* Set by arch code. */
 	unsigned int section_size_bits;
@@ -309,6 +313,7 @@ extern struct archinfo i386_arch;
 extern struct archinfo mips_arch;
 extern struct archinfo arm_arch;
 extern struct archinfo ppc32_arch;
+extern struct archinfo arm64_arch;
 
 /*
  * All the following structures are stolen and modified from
