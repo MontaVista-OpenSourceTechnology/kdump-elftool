@@ -17,7 +17,7 @@ where you will be doing the analysis.  Or do:
   kdump-elftool topelf | gzip >pmcore.gz
 to compress it, probably a good idea as it will compress quite well.
 
-Before doing analysis, uncompress it if necessary run:
+Before doing analysis, uncompress it if necessary and then run:
   kdump-elftool tovelf -i pmcore -o vmcore
 to generate the gdb-usable core file.
 
