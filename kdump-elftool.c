@@ -784,7 +784,8 @@ find_page_by_pfn(struct kdt_data *d, struct page_range *range, uint64_t pfn,
 		return -1;
 
 	offset = range->mapaddr + ((pfn - range->start_page) * d->size_page);
-	rv = fetch_vaddr_data(d, offset, d->size_page, d->pagedata);
+	rv = fetch_vaddr_data_err(d, offset, d->size_page, d->pagedata,
+				  "pagedata.size_page");
 	if (rv == -1)
 		goto out_err;
 
@@ -960,7 +961,8 @@ process_free_list(struct kdt_data *d, unsigned int order, unsigned char *list)
 	for (;;) {
 		GElf_Addr page_offset = next - d->page_lru_offset;
 
-		rv = fetch_vaddr_data(d, next, d->list_head_size, link);
+		rv = fetch_vaddr_data_err(d, next, d->list_head_size, link,
+					  "free_head.next");
 		if (rv == -1)
 			return -1;
 
@@ -1196,8 +1198,9 @@ read_sparse_maps(struct kdt_data *d, struct vmcoreinfo_data *vmci, bool extreme)
 				goto out_err;
 			if (!sectionptr)
 				continue;
-			rv = fetch_vaddr_data(d, sectionptr, sections_size,
-					      sections);
+			rv = fetch_vaddr_data_err(d, sectionptr, sections_size,
+						  sections,
+						  "sectionptr->sections_size");
 			if (rv == -1)
 				goto out_err;
 		} else {
@@ -1256,7 +1259,8 @@ read_discontig_maps(struct kdt_data *d, struct vmcoreinfo_data *vmci)
 		return -1;
 	}
 
-	rv = fetch_vaddr_data(d, node_data_addr, count * d->ptrsize, node_data);
+	rv = fetch_vaddr_data_err(d, node_data_addr, count * d->ptrsize,
+				  node_data, "node_data[x].ptrsize");
 	if (rv == -1)
 		goto out_err;
 
