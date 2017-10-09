@@ -161,6 +161,8 @@
 #define ADDR32_MASK(shift) ((1 << (shift)) - 1)
 #define ADDR64_MASK(shift) ((1ULL << (shift)) - 1)
 
+#define XKPHYS_START 0x8000000000000000ULL
+
 /*
  * MIPS-specific things we get out of the vmcore from the old kernel.
  * Order here does not matter, as long as the required elements are all
@@ -698,6 +700,13 @@ walk_mips64(struct elfc *pelf, const struct mips_walk_data *mwd,
 	rv = scan_range(pelf, mwd, pgdaddr, mwd->PAGE_OFFSET,
 			&begin_addr, &end_addr,
 			mwd->PAGE_OFFSET, mwd->PAGE_OFFSET + maxaddr - 1,
+			handle_page, userdata, walk_mips64);
+	if (rv)
+		goto out;
+
+	rv = scan_range(pelf, mwd, pgdaddr, XKPHYS_START,
+			&begin_addr, &end_addr,
+			XKPHYS_START, XKPHYS_START + maxaddr - 1,
 			handle_page, userdata, walk_mips64);
 	if (rv)
 		goto out;
