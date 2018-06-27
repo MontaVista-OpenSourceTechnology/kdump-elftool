@@ -1,18 +1,24 @@
-# Object files
+Makefile
+Makefile.in
+.deps
+.libs
 *.o
-*.ko
-
-# Libraries
-*.lib
 *.a
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
+*.lo
+*.la
+*.map
+*.pc
+tags
+/configure
+/config.*
+/missing
+/libtool
+/ltmain.sh
+/stamp-h1
+/install-sh
+/aclocal.m4
+/compile
+/depcomp
+/autom4te.cache
+INSTALL
+m4
