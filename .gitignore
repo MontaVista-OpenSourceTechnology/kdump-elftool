@@ -22,3 +22,4 @@ tags
 /autom4te.cache
 INSTALL
 m4
+kdump-elftool
