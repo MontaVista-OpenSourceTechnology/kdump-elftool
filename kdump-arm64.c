@@ -40,6 +40,15 @@
 
 #include "elfc.h"
 
+/*
+ * On ARM64, addresses 0x0000000000000000 to 0x0000ffffffffffff are
+ * userspace and addresses 0xffff000000000000 to 0xffffffffffffffff
+ * are kernel space.  bit 49 is "sign extended".  Bit 49 is also used
+ * to tell which pgd to use.  If bit 49 is 0, TTB0 (TTBR0 in the Linux
+ * sources) is used and the next 48 bits are translated by the address
+ * table.  If bit 49 is 1, then TTB1 (TTBR1) is used.
+ */
+
 struct arm64_walk_data {
 	struct elfc *pelf;
 	uint32_t page_size;
@@ -211,15 +220,20 @@ arm64_walk(struct elfc *pelf, GElf_Addr pgdaddr,
 	begin_addr &= ~0xffff000000000000ULL;
 	end_addr &= ~0xffff000000000000ULL;
 	if (btop == 0) {
-		rv = arm64_level(awd, 0, pgdaddr,
-				 begin_addr, end_addr, awd->pgtable_levels - 1,
-				 handle_page, userdata);
-		if (rv)
-			return rv;
+		/*
+		 * Here we would need the TTBR0 value, which is not
+		 * readily available.  So we just ignore user address
+		 * space for now.
+		 */
 	}
 	if (etop) {
+		uint64_t estart = begin_addr;
+
+		if (btop == 0)
+			estart = 0;
+
 		rv = arm64_level(awd, 0xffff000000000000ULL, pgdaddr,
-				 begin_addr, end_addr, awd->pgtable_levels - 1,
+				 estart, end_addr, awd->pgtable_levels - 1,
 				 handle_page, userdata);
 	}
 	return rv;
