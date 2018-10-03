@@ -295,7 +295,8 @@ struct kdt_data {
 	unsigned int section_mem_map_offset;
 #define	SECTION_MARKED_PRESENT	(1ULL<<0)
 #define SECTION_HAS_MEM_MAP	(1ULL<<1)
-#define SECTION_MAP_LAST_BIT	(1ULL<<2)
+#define SECTION_IS_ONLINE	(1ULL<<2)
+#define SECTION_MAP_LAST_BIT	(1ULL<<3)
 #define SECTION_MAP_MASK	(~(SECTION_MAP_LAST_BIT-1))
 
 	struct list page_maps;
