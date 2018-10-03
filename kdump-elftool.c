@@ -44,6 +44,7 @@
 #include <string.h>
 #include <gelf.h>
 #include <stdarg.h>
+#include <ctype.h>
 
 #include "config.h"
 #include "list.h"
