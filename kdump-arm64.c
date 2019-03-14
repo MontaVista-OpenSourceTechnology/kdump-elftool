@@ -240,6 +240,21 @@ arm64_walk(struct elfc *pelf, GElf_Addr pgdaddr,
 }
 
 static int
+arm64_vmem_to_pmem(struct elfc *elf, GElf_Addr vaddr, GElf_Addr *paddr,
+		   void *arch_data)
+{
+	int rv = 0;
+	struct arm64_walk_data *awd = arch_data;
+
+	if (vaddr > 0xffff000000000000ULL)
+		*paddr = vaddr - awd->kimage_voffset;
+	else
+		rv = elfc_vmem_to_pmem(elf, vaddr, paddr);
+
+	return rv;
+}
+
+static int
 arm64_task_ptregs(struct kdt_data *d, GElf_Addr task, void *regs)
 {
 	uint64_t *pt_regs = regs;
@@ -288,6 +303,7 @@ enum vmcoreinfo_labels {
 	VMCI_NUMBER_VA_BITS,
 	VMCI_NUMBER_kimage_voffset,
 	VMCI_NUMBER_PHYS_OFFSET,
+	VMCI_PAGESIZE,
 	/* End actual elements. */
 	VMCI_NUM_ELEMENTS
 };
@@ -300,6 +316,7 @@ arm64_arch_setup(struct elfc *pelf, struct kdt_data *d, void **arch_data)
 		VMCI_NUMBER(VA_BITS),
 		VMCI_HEXNUMBER(kimage_voffset),
 		VMCI_HEXNUMBER(PHYS_OFFSET),
+		VMCI_PAGESIZE(),
 		{ NULL }
 	};
 	int i;
@@ -320,14 +337,14 @@ arm64_arch_setup(struct elfc *pelf, struct kdt_data *d, void **arch_data)
 		}
 	}
 
-	awd->page_size = d->page_size;
+	awd->page_size = vmci[VMCI_PAGESIZE].val;
 	awd->pelf = pelf;
 	awd->conv64 = d->conv64;
 	awd->va_bits = vmci[VMCI_NUMBER_VA_BITS].val;
 	awd->kimage_voffset = vmci[VMCI_NUMBER_kimage_voffset].val;
 	awd->phys_offset = vmci[VMCI_NUMBER_PHYS_OFFSET].val;
 
-	switch (d->page_size) {
+	switch (awd->page_size) {
 	case 4096:
 		if (awd->va_bits > 39)
 			awd->pgtable_levels = 4;
@@ -353,7 +370,7 @@ arm64_arch_setup(struct elfc *pelf, struct kdt_data *d, void **arch_data)
 
 	default:
 		free(awd);
-		fprintf(stderr, "Invalid page size: %u\n", d->page_size);
+		fprintf(stderr, "Invalid page size: %u\n", awd->page_size);
 		return -1;
 	}
 	
@@ -380,5 +397,6 @@ struct archinfo arm64_arch = {
 	.default_elfclass = ELFCLASS64,
 	.setup_arch_pelf = arm64_arch_setup,
 	.cleanup_arch_data = arm64_arch_cleanup,
-	.walk_page_table = arm64_walk
+	.walk_page_table = arm64_walk,
+	.vmem_to_pmem = arm64_vmem_to_pmem
 };

@@ -377,11 +377,16 @@ add_phys_pgd_ptr(struct elfc *elf, struct elfc *velf, GElf_Addr virt_pgdir)
 	int rv;
 	GElf_Addr phys_pgdir;
 	char buf[128];
+	struct archinfo *arch;
 
-	rv = elfc_vmem_to_pmem(velf, virt_pgdir, &phys_pgdir);
-	if (rv == -1) {
-		int err = elfc_get_errno(velf);
-		struct archinfo *arch;
+	arch = find_arch(elfc_getmachine(velf));
+	if (!arch) {
+		fprintf(stderr, "Unknown ELF machine in input"
+			" file: %d\n", elfc_getmachine(velf));
+		return -1;
+	}
+
+	if (arch->vmem_to_pmem) {
 		void *arch_data;
 
 		/*
@@ -389,13 +394,6 @@ add_phys_pgd_ptr(struct elfc *elf, struct elfc *velf, GElf_Addr virt_pgdir)
 		 * properly add the vaddr.  There is an arch hack
 		 * for those, so look it up.
 		 */
-		arch = find_arch(elfc_getmachine(velf));
-		if (!arch) {
-			fprintf(stderr, "Unknown ELF machine in input"
-				" file: %d\n", elfc_getmachine(velf));
-			return -1;
-		}
-
 		if (arch->setup_arch_pelf) {
 			struct kdt_data d;
 
@@ -411,13 +409,14 @@ add_phys_pgd_ptr(struct elfc *elf, struct elfc *velf, GElf_Addr virt_pgdir)
 						&phys_pgdir, arch_data);
 
 		arch->cleanup_arch_data(arch_data);
-
-		if (rv == -1) {
-			fprintf(stderr, "Error getting swapper_pg_dir "
-				"phys addr: %s\n",
-				strerror(err));
-			return -1;
-		}
+	} else {
+		rv = elfc_vmem_to_pmem(velf, virt_pgdir, &phys_pgdir);
+	}
+	if (rv == -1) {
+		int err = elfc_get_errno(velf);
+		fprintf(stderr, "Error getting swapper_pg_dir phys addr: %s\n",
+			strerror(err));
+		return -1;
 	}
 	sprintf(buf, "ADDRESS(phys_pgd_ptr)=%llx\n",
 		(unsigned long long) phys_pgdir);
