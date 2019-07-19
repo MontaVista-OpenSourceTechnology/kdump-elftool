@@ -308,7 +308,9 @@ set the
 SIZE(context_switch_frame)=1
 .RE
 
-in your thread_vminfo file from one to the value you calculate.
+in your thread_vminfo file from one to the value you calculate.  Be
+careful, there may be sneaky pushes around __switch_to that you may
+have to account for, too.
 
 If you have the x86 patch in the kernel-patches directory applied to
 your kernel, then it should contain the code to add the context switch
@@ -338,6 +340,10 @@ SYMBOL(__thread_sleep_point)=ffffffff8174451a
 .RE
 
 to your thread_vminfo file.
+
+Note that __schedule may not call __switch_to.  You will have to
+find the function that __schedule calls that calls __switch_to,
+(like __schedule_nobkl) and do the procedure in that function.
 
 .SH FILES
 /dev/mem, /proc/vmcore
