@@ -247,7 +247,7 @@ x86_64_task_ptregs(struct kdt_data *d, GElf_Addr task, void *regs)
 			return -1;
 		}
 
-		pt_regs->rbp = pt_regs->rsp - d->x86_context_switch_frame_size;
+		pt_regs->rbp = pt_regs->rsp + d->x86_context_switch_frame_size;
 		pt_regs->rip = d->x86___thread_sleep_point;
 	} else {
 		/* Context switch was redone in 4.9. */
