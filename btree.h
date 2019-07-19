@@ -748,6 +748,30 @@ BTREE_EXPORT_NAME(Insert_Shift_Right) (btree_t      *tree,
     }
 }
 
+static BTREE_EXPORT_NAME(btree_node_t) *
+BTREE_EXPORT_NAME(Alloc_Leaf) (btree_t *tree)
+{
+    BTREE_EXPORT_NAME(btree_leaf_t) *New_Node;
+
+    New_Node = malloc(sizeof(*New_Node));
+    if (New_Node) {
+	memset(New_Node, 0, sizeof(*New_Node));
+	New_Node->Leaf = 1;
+    }
+    return (BTREE_EXPORT_NAME(btree_node_t) *) New_Node;
+}
+
+static BTREE_EXPORT_NAME(btree_node_t) *
+BTREE_EXPORT_NAME(Alloc_Node) (btree_t *tree)
+{
+    BTREE_EXPORT_NAME(btree_node_t) *New_Node;
+
+    New_Node = malloc(sizeof(*New_Node));
+    if (New_Node)
+	memset(New_Node, 0, sizeof(*New_Node));
+    return New_Node;
+}
+
 static int
 BTREE_EXPORT_NAME(Split_Node) (btree_t      *tree,
 	    BTREE_EXPORT_NAME(btree_node_t) **Pos,
@@ -765,19 +789,15 @@ BTREE_EXPORT_NAME(Split_Node) (btree_t      *tree,
     int          I;
 
     if ((*Pos)->Leaf) {
-	/* FIXME - no error checking on malloc. */
-	New_Node = malloc (sizeof(BTREE_EXPORT_NAME(btree_leaf_t)));
+	New_Node = BTREE_EXPORT_NAME(Alloc_Leaf)(tree);
 	if (New_Node == NULL) {
 	    return BTREE_OUT_OF_MEMORY;
 	}
-	New_Node->Leaf = 1;
     } else {
-	/* FIXME - no error checking on malloc. */
-	New_Node = malloc (sizeof(BTREE_EXPORT_NAME(btree_node_t)));
+	New_Node = BTREE_EXPORT_NAME(Alloc_Node)(tree);
 	if (New_Node == NULL) {
 	    return BTREE_OUT_OF_MEMORY;
 	}
-	New_Node->Leaf = 0;
     }
 
     if (Rightmost
@@ -1039,11 +1059,10 @@ BTREE_EXPORT_NAME(Insert_Into_Node) (btree_t      *tree,
 
             if (! Done) {
 		if (Curr_Node == tree->Root) {
-		    Parent = malloc(sizeof(BTREE_EXPORT_NAME(btree_node_t)));
+		    Parent = BTREE_EXPORT_NAME(Alloc_Node)(tree);
 		    if (Parent == NULL) {
 			return BTREE_OUT_OF_MEMORY;
 		    }
-		    Parent->Leaf = 0;
 		    Parent->Parent = NULL;
 
 		    Parent->Right_Child = Curr_Node;
@@ -1724,9 +1743,8 @@ BTREE_EXPORT_NAME(prev) (btree_t     *tree,
 BTREE_NAMES_LOCAL void
 BTREE_EXPORT_NAME(init) (btree_t *tree)
 {
-    tree->Root = malloc (sizeof(BTREE_EXPORT_NAME(btree_leaf_t)));
+    tree->Root = BTREE_EXPORT_NAME(Alloc_Leaf)(tree);
     tree->Root->Parent = NULL;
-    tree->Root->Leaf = 1;
     tree->Count = 0;
     tree->Allow_Duplicates = 0;
     tree->Update = 0;
@@ -1745,6 +1763,7 @@ BTREE_EXPORT_NAME(free_node)(btree_t      *tree,
 	{
 	    BTREE_EXPORT_NAME(free_node)(tree, node->Children[i]);
 	}
+	BTREE_EXPORT_NAME(free_node)(tree, node->Children[i]);
 	BTREE_EXPORT_NAME(free_node)(tree, node->Right_Child);
     }
 
@@ -1758,6 +1777,6 @@ BTREE_EXPORT_NAME(free) (btree_t *tree)
 	return;
 
     BTREE_EXPORT_NAME(free_node)(tree, tree->Root);
-    tree->Root = 0;
+    tree->Root = NULL;
     tree->Count = 0;
 }
