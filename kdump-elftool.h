@@ -253,8 +253,11 @@ struct kdt_data {
 	/* Offsets for task struct and friends. */
 	unsigned int task_stack;
 	unsigned int task_tasks_next;
+	bool task_thread_node_found;
 	unsigned int task_thread_node;
 	unsigned int task_signal;
+	bool signal_thread_head_found;
+	unsigned int task_thread_group;
 	unsigned int signal_thread_head;
 	unsigned int task_pid;
 	unsigned int task_thread;

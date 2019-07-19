@@ -2202,23 +2202,24 @@ enum thread_info_labels {
 	VMCI_OFFSET_thread_info__cpu_context, /* for ARM */
 	VMCI_SYMBOL___switch_to, /* for ARM */
 	VMCI_OFFSET_thread__cpu_context, /* for ARM64 */
+	VMCI_OFFSET_task_struct__thread_node,
+	VMCI_OFFSET_signal_struct__thread_head,
 	/* Begin required elements. */
 #define KV_REQ VMCI_SYMBOL_init_task
 	VMCI_SYMBOL_init_task,
 	VMCI_OFFSET_task_struct__stack,
 	VMCI_OFFSET_task_struct__tasks,
-	VMCI_OFFSET_task_struct__thread_node,
+	VMCI_OFFSET_task_struct__thread_group,
 	VMCI_OFFSET_task_struct__signal,
 	VMCI_OFFSET_task_struct__pid,
-	VMCI_OFFSET_task_struct__thread,
-	VMCI_OFFSET_signal_struct__thread_head
+	VMCI_OFFSET_task_struct__thread
 };
 
 typedef int (*thread_handler)(struct kdt_data *d, GElf_Addr task,
 			      void *userdata);
 
 static int
-handle_kernel_process_threads(struct kdt_data *d, GElf_Addr task,
+handle_kernel_process_threads_sighead(struct kdt_data *d, GElf_Addr task,
 			      thread_handler handler, void *userdata)
 {
 	uint64_t signal, thread_head, thread_link;
@@ -2256,6 +2257,56 @@ handle_kernel_process_threads(struct kdt_data *d, GElf_Addr task,
 }
 
 static int
+handle_kernel_process_threads_tgroup(struct kdt_data *d, GElf_Addr task,
+			      thread_handler handler, void *userdata)
+{
+	uint64_t thread_head, thread_link;
+	int rv;
+	long count = 0;
+
+	thread_head = task + d->task_thread_group;
+
+	rv = fetch_vaddrlong(d, thread_head + d->list_head_next_offset,
+			     &thread_link, "next thread2");
+	if (rv)
+		return rv;
+
+	rv = handler(d, task, userdata);
+	if (rv)
+		return rv;
+
+	while (thread_link && thread_link != thread_head) {
+		rv = handler(d, thread_link - d->task_thread_group, userdata);
+		if (rv)
+			return rv;
+
+		rv = fetch_vaddrlong(d, thread_link + d->list_head_next_offset,
+				     &thread_link, "next thread");
+		if (rv)
+			return rv;
+
+		if (count++ > 65536) {
+			pr_err("Too many threads in list, aborting\n");
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int
+handle_kernel_process_threads(struct kdt_data *d, GElf_Addr task,
+			      thread_handler handler, void *userdata)
+{
+	if (d->signal_thread_head_found)
+		return handle_kernel_process_threads_sighead(
+			d, task, handler, userdata);
+	else
+		return handle_kernel_process_threads_tgroup(
+			d, task, handler, userdata);
+}
+
+static int
 handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 				void *userdata)
 {
@@ -2268,14 +2319,15 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 		VMCI_OFFSET(thread_info, cpu_context),
 		VMCI_SYMBOL(__switch_to),
 		VMCI_OFFSET(thread, cpu_context),
+		VMCI_OFFSET(task_struct, thread_node),
+		VMCI_OFFSET(signal_struct, thread_head),
 		VMCI_SYMBOL(init_task),
 		VMCI_OFFSET(task_struct, stack),
 		VMCI_OFFSET(task_struct, tasks),
-		VMCI_OFFSET(task_struct, thread_node),
+		VMCI_OFFSET(task_struct, thread_group),
 		VMCI_OFFSET(task_struct, signal),
 		VMCI_OFFSET(task_struct, pid),
 		VMCI_OFFSET(task_struct, thread),
-		VMCI_OFFSET(signal_struct, thread_head),
 		{ NULL }
 	};
 	uint64_t task_addr, init_task_addr;
@@ -2300,10 +2352,16 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 	d->task_stack = vmci[VMCI_OFFSET_task_struct__stack].val;
 	d->task_tasks_next = vmci[VMCI_OFFSET_task_struct__tasks].val +
 		d->list_head_next_offset;
+	d->task_thread_group = vmci[VMCI_OFFSET_task_struct__thread_group].val;
+	d->task_thread_node_found =
+		vmci[VMCI_OFFSET_task_struct__thread_node].found;
 	d->task_thread_node = vmci[VMCI_OFFSET_task_struct__thread_node].val;
+	d->signal_thread_head_found =
+		vmci[VMCI_OFFSET_signal_struct__thread_head].found;
+	d->signal_thread_head =
+		vmci[VMCI_OFFSET_signal_struct__thread_head].val;
 	d->task_signal = vmci[VMCI_OFFSET_task_struct__signal].val;
 	d->task_pid = vmci[VMCI_OFFSET_task_struct__pid].val;
-	d->signal_thread_head = vmci[VMCI_OFFSET_signal_struct__thread_head].val;
 	d->task_thread = vmci[VMCI_OFFSET_task_struct__thread].val;
 	d->mips_task_resume_found = vmci[VMCI_SYMBOL_resume].found;
 	if (d->mips_task_resume_found)
