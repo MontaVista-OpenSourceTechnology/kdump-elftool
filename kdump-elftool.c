@@ -1358,8 +1358,9 @@ read_page_maps(struct kdt_data *d)
 	d->PG_private = 1ULL << vmci[VMCI_NUMBER_PG_private].val;
 	VMCI_CHECK_FOUND(vmci, NUMBER, PG_swapcache);
 	d->PG_swapcache = 1ULL << vmci[VMCI_NUMBER_PG_swapcache].val;
-	VMCI_CHECK_FOUND(vmci, NUMBER, PG_slab);
-	d->PG_slab = 1ULL << vmci[VMCI_NUMBER_PG_slab].val;
+	if (!vmci[VMCI_NUMBER_PG_slab].found)
+		/* If not there, two after PG_lru. */
+		d->PG_slab = 1ULL << (vmci[VMCI_NUMBER_PG_lru].val + 2);
 	if (vmci[VMCI_NUMBER_PG_poison].found)
 		d->PG_poison = 1ULL << vmci[VMCI_NUMBER_PG_poison].val;
 
@@ -1381,10 +1382,17 @@ read_page_maps(struct kdt_data *d)
 	d->page_mapping_offset = vmci[VMCI_OFFSET_page__mapping].val;
 	VMCI_CHECK_FOUND(vmci, OFFSET, page__lru);
 	d->page_lru_offset = vmci[VMCI_OFFSET_page__lru].val;
-	VMCI_CHECK_FOUND(vmci, OFFSET, page___mapcount);
-	d->page_mapcount_offset = vmci[VMCI_OFFSET_page___mapcount].val;
-	VMCI_CHECK_FOUND(vmci, OFFSET, page__private);
-	d->page_private_offset = vmci[VMCI_OFFSET_page__private].val;
+	if (vmci[VMCI_OFFSET_page___mapcount].found)
+		d->page_mapcount_offset = vmci[VMCI_OFFSET_page___mapcount].val;
+	else if (d->is_64bit)
+		d->page_mapcount_offset = 12;
+	else
+		d->page_mapcount_offset = 12;
+	if (vmci[VMCI_OFFSET_page__private].found)
+		d->page_private_offset = vmci[VMCI_OFFSET_page__private].val;
+	else
+		/* In the same union. */
+		d->page_private_offset = d->page_mapping_offset;
 	if (vmci[VMCI_OFFSET_page__compound_head].found) {
 		d->page_compound_head_offset =
 			vmci[VMCI_OFFSET_page__compound_head].val;
