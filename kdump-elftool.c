@@ -456,7 +456,9 @@ handle_vminfo_notes(struct elfc *elf, struct vmcoreinfo_data *vals,
 		       "there are no empty lines, especially at the end.\n");
 		return rv;
 	}
-	return scan_for_vminfo_notes(elf, vmcoreinfo_scanner, vals);
+	if (elf)
+	    return scan_for_vminfo_notes(elf, vmcoreinfo_scanner, vals);
+	return 0;
 }
 
 int
