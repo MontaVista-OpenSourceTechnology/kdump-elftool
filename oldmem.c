@@ -542,7 +542,7 @@ read_oldmem(char *oldmem, char *vmcore, char *extra_vminfo)
 		fri.is_64bit = true;
 	} else {
 		fprintf(stderr, "Error: SIZE(list_head) not valid: %llu\n",
-			(unsigned long long) vmci[0].val);
+			(unsigned long long) vmci[3].val);
 		goto out_err;
 	}
 	fri.count = 0;
