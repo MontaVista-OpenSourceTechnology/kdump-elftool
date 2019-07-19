@@ -7,19 +7,21 @@ kdump-elftool \- Kdump dump handling tool
 .B kdump-elftool
 [\-\-help] topelf [\--help]
 [\-\-oldmem|\-i <oldmem>]
+[\-\-intype|-I oldmem|qemu]
 [\-\-outfile|-o <output file>]
 [\-\-vmcore|-v <vmcore>]
 [\-\-elfclass|-c 32|64]
 [\-\-level|-l all|inuse|user|cache|kernel]
 [\-\-extravminfo|-e <vminfofile>]
 [\-\-debug|-d]
+[\-\-m32|\-4] [\-\-m64|\-8]
 
 .B kdump-elftool
 [\-\-help] tovelf [\--help]
 [\-\-infile|\-i <oldmem or pelf>]
 [\-\-outfile|-o <output file>]
 [\-\-vmcore|-v <vmcore>]
-[\-\-intype|-I oldmem|pelf]
+[\-\-intype|-I oldmem|pelf|qemu]
 [\-\-physpgd|-P <pgd phys address>]
 [\-\-elfclass|-c 32|64]
 [\-\-level|-l all|inuse|user|cache|kernel]
@@ -27,6 +29,7 @@ kdump-elftool \- Kdump dump handling tool
 [\-\-extravminfo|-e <vminfofile>]
 [\-\-procthreads|-p]
 [\-\-debug|-d]
+[\-\-m32|\-4] [\-\-m64|\-8]
 
 .B kdump-elftool
 [\-\-help] addrandoff [\--help]
@@ -172,8 +175,12 @@ data from the vmcore if this is not specified.  If
 is not given, then this parameter is required and should be a physical
 elf file.
 .TP
-.I "\-\-intype|-I oldmem|pelf"
-Set the input file time for conversion to velf.
+.I "\-\-intype|-I oldmem|pelf|qemu"
+Set the input file time for conversion to velf.  oldmem sets it to
+use /proc/vmcore (and /dev/mem if specified).  pelf sets it to use
+a file that was processed with this program with topelf.  qemu
+sets it to use a QEMU vmdump file.  See the section QEMU VMDUMP
+for details.
 .TP
 .I "\-\-physpgd|-P <pgd phys address>"
 Set the physical address of the pgd pointer.  This is read from the
@@ -215,6 +222,14 @@ See "PROCESSES TO GDB THREADS" below for more details.
 .I "\-\-debug|-d"
 Dump debug information.  Generally only useful if you are debugging
 kdump-elftool itself.
+.TP
+.I "\-\-m32|\-4"
+Set the machine type to a 32-bit machine.  Used by QEMU processing,
+see QEMU VDUMP below for details.
+.TP
+.I "\-\-m64|\-8"
+Set the machine type to a 64-bit machine.  Used by QEMU processing,
+see QEMU VDUMP below for details.
 
 .SH RATIONALE
 Why not just use /proc/vmcore, you ask?  The /proc/vmcore file
@@ -287,14 +302,23 @@ You should see something like:
 
 .RS 4
 0xffffffff81744290 <__schedule>:	push   %rbp
+.br
 0xffffffff81744291 <__schedule+1>:	mov    $0xdf40,%rax
+.br
 0xffffffff81744298 <__schedule+8>:	mov    %gs:0x9908,%rdx
+.br
 0xffffffff817442a1 <__schedule+17>:	mov    %rsp,%rbp
+.br
 0xffffffff817442a4 <__schedule+20>:	push   %r15
+.br
 0xffffffff817442a6 <__schedule+22>:	push   %r14
+.br
 0xffffffff817442a8 <__schedule+24>:	push   %r13
+.br
 0xffffffff817442aa <__schedule+26>:	push   %r12
+.br
 0xffffffff817442ac <__schedule+28>:	push   %rbx
+.br
 0xffffffff817442ad <__schedule+29>:	sub    $0x48,%rsp
 .RE
 
@@ -328,8 +352,11 @@ Just keep hitting return until you find a call to __switch_to, like:
 
 .RS 4
 0xffffffff81744513 <__schedule+643>:	mov    %rsp,0x408(%rdi)
+.br
 0xffffffff8174451a <__schedule+650>:	mov    0x408(%rsi),%rsp
+.br
 0xffffffff81744521 <__schedule+657>:	callq  0xffffffff810013c0 <__switch_to>
+.br
 0xffffffff81744526 <__schedule+662>:	mov    %gs:0x9900,%rsi
 .RE
 
@@ -344,6 +371,67 @@ to your thread_vminfo file.
 Note that __schedule may not call __switch_to.  You will have to
 find the function that __schedule calls that calls __switch_to,
 (like __schedule_nobkl) and do the procedure in that function.
+
+.SH QEMU VMDUMP
+kdump-elftool can process QEMU vmdump file from i386 and x86_64
+systems.  It is, unfortunately, somewhat complicated because that file
+doesn't have any direct acces to vminfo information that is used for
+the processing of the dump.  However, it is possible to work around
+this.
+
+To do this, load the vmlinux file into gdb, source kdump_gdbinit,
+and run vminfo_qemu_base.  This will print out the vminfo information
+required to get kdump-elftool started.  Something like:
+.RS 4
+gdb vmlinux
+.br
+GNU gdb (Ubuntu 8.1-0ubuntu3) 8.1.0.20180409-git
+.br
+....
+.br
+(gdb) source ../kdump_gdbinit
+.br
+(gdb) vminfo_qemu_base
+.br
+SYMBOL(vmcoreinfo_data)=0xffffffff819dcf40
+.br
+OSRELEASE=2.6.32.71+
+.br
+SIZE(list_head)=16
+.br
+OFFSET(list_head.next)=0
+.br
+OFFSET(list_head.prev)=8
+.br
+SYMBOL(_stext)=ffffffff8100c000
+.br
+SYMBOL(idt_table)=0xffffffff81985000
+.br
+SYMBOL(per_cpu__current_task)=0xe880
+.br
+PAGESIZE=4096
+.RE
+
+Then save that output in a file, say vminfo.  Then run the command
+.RS 4
+kdump-elftool tovelf -I qemu -i qemu_vmcore -e vminfo --m64 -o vcore
+.RE
+You have to specify whether qemu was a 32 or 64-bit machine, because
+there's no way to tell from the vmcore file, and you can run a 32-bit
+kernel in a 64-bit VM.
+
+You can use this with
+.I \-\-procthreads
+but you will need to append the thread processing vmcore info to the
+vminfo file.
+
+Note that this requires that the kernel be compiled with kernel core
+dump support, even if it isn't configured, because it pulls the kernel
+vminfo data from an internal data structure.  If you don't have that
+there is a vminfo_qemu_all command in kdump_gdbinit that dumps all
+that it can.  There are some length fields that are not filled in,
+though.  You will need to fill those values in yourself.  They are
+marked with "??".
 
 .SH FILES
 /dev/mem, /proc/vmcore

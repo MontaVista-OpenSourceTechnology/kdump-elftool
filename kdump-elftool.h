@@ -151,6 +151,7 @@ struct archinfo *find_arch(int elfmachine);
 void add_arch(struct archinfo *arch);
 
 struct elfc *read_oldmem(char *oldmem, char *vmcore, char *extra_vminfo);
+struct elfc *read_qemumem(char *vmdump, char *extra_vminfo, int machineclass);
 
 int fetch_vaddr_data_err(struct kdt_data *d, GElf_Addr addr, unsigned int len,
 			 void *out, char *name);

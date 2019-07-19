@@ -45,6 +45,7 @@
 #include <gelf.h>
 #include <stdarg.h>
 #include <ctype.h>
+#include <assert.h>
 
 #include "config.h"
 #include "list.h"
@@ -1812,32 +1813,45 @@ out_err:
 	return rv;
 }
 
+enum intype {
+	INTYPE_OLDMEM,
+	INTYPE_PELF,
+	INTYPE_QEMU
+};
+
 static int
 topelf(int argc, char *argv[])
 {
 	char *outfile = NULL;
-	char *oldmem = NULL;
+	char *infile = NULL;
+	enum intype intype = INTYPE_OLDMEM;
 	char *vmcore = "/proc/vmcore";
 	static const struct option longopts[] = {
 		{ "help",	no_argument,		NULL, 'h' },
 		{ "oldmem",	required_argument,	NULL, 'i' },
+		{ "intype",	required_argument,	NULL, 'I' },
 		{ "outfile",	required_argument,	NULL, 'o' },
 		{ "vmcore",	required_argument,	NULL, 'v' },
 		{ "elfclass",	required_argument,	NULL, 'c' },
 		{ "level",	required_argument,	NULL, 'l' },
 		{ "debug",	no_argument,		NULL, 'd' },
 		{ "extravminfo",required_argument,	NULL, 'e' },
+		{ "m64",	no_argument,		NULL, '8' },
+		{ "m32",	no_argument,		NULL, '4' },
 		{ NULL }
 	};
 	static const char *helpstr[] = {
 		"This info",
 		"File to use for raw memory (like /dev/mem), unused by default",
+		"The file type, either oldmem or qemu, defaults to oldmem",
 		"File send output to instead of stdout",
 		"The vmcore file, defaults to /proc/vmcore",
 		"Set the elfclass (either 32 or 64)",
 		"Set the dump level: all, inuse, user, cache, or kernel",
 		"increment the debug level",
 		"Override or add new vminfo information",
+		"Machine is a 64-bit machine",
+		"Machine is a 32-bit machine",
 		NULL
 	};
 	int ofd = 1;
@@ -1855,6 +1869,7 @@ topelf(int argc, char *argv[])
 	struct elfc *velf = NULL;
 	struct velf_data dpage;
 	int elfclass = ELFCLASSNONE;
+	int machineclass = ELFCLASSNONE;
 	int level = DUMP_KERNEL;
 	int num_phdrs;
 	int i;
@@ -1864,7 +1879,7 @@ topelf(int argc, char *argv[])
 	memset(d, 0, sizeof(*d));
 	for (;;) {
 		int curr_optind = optind;
-		int c = getopt_long(argc, argv, "+ho:i:v:c:l:de:", longopts,
+		int c = getopt_long(argc, argv, "+ho:i:I:v:c:l:de:84", longopts,
 				    NULL);
 		if (c == -1)
 			break;
@@ -1873,7 +1888,17 @@ topelf(int argc, char *argv[])
 			outfile = optarg;
 			break;
 		case 'i':
-			oldmem = optarg;
+			infile = optarg;
+			break;
+		case 'I':
+			if (strcmp(optarg, "oldmem") == 0) {
+				intype = INTYPE_OLDMEM;
+			} else if (strcmp(optarg, "qemu") == 0) {
+				intype = INTYPE_QEMU;
+			} else {
+				subcmd_usage("Unknown input type: %s\n",
+					     optarg);
+			}
 			break;
 		case 'v':
 			vmcore = optarg;
@@ -1904,6 +1929,12 @@ topelf(int argc, char *argv[])
 		case 'd':
 			debug++;
 			break;
+		case '8':
+			machineclass = ELFCLASS64;
+			break;
+		case '4':
+			machineclass = ELFCLASS32;
+			break;
 		case '?':
 			subcmd_usage("Unknown option: %s\n", argv[curr_optind]);
 		}
@@ -1924,7 +1955,13 @@ topelf(int argc, char *argv[])
 		}
 	}
 
-	d->elf = read_oldmem(oldmem, vmcore, d->extra_vminfo);
+	if (intype == INTYPE_OLDMEM) {
+		d->elf = read_oldmem(infile, vmcore, d->extra_vminfo);
+	} else if (intype == INTYPE_QEMU) {
+		d->elf = read_qemumem(infile, d->extra_vminfo, machineclass);
+	} else {
+		assert(1);
+	}
 	if (!d->elf)
 		goto out_err;
 
@@ -1984,11 +2021,9 @@ topelf(int argc, char *argv[])
 
 	elfc_set_fd(velf, ofd);
 
-	if (elfclass == ELFCLASSNONE) {
-		elfc_setclass(velf, d->arch->default_elfclass);
-	} else {
-		elfc_setclass(velf, elfclass);
-	}
+	if (elfclass == ELFCLASSNONE)
+		elfclass = d->arch->default_elfclass;
+	elfc_setclass(velf, elfclass);
 
 	rv = read_page_maps(d);
 	if (rv == -1)
@@ -2520,6 +2555,8 @@ tovelf(int argc, char *argv[])
 		{ "vmlinux",	required_argument,	NULL, 'm' },
 		{ "extravminfo",required_argument,	NULL, 'e' },
 		{ "procthreads",no_argument,		NULL, 'p' },
+		{ "m64",	no_argument,		NULL, '8' },
+		{ "m32",	no_argument,		NULL, '4' },
 		{ NULL }
 	};
 	static const char *helpstr[] = {
@@ -2528,7 +2565,7 @@ tovelf(int argc, char *argv[])
 		" otherwise required",
 		"File send output to, stdout if not specified",
 		"The vmcore file, defaults to /proc/vmcore, only for oldmem",
-		"The file type, either pelf or oldmem, defaults to pelf",
+		"The file type, either pelf, qemu or oldmem, defaults to pelf",
 		"The physical address of the kernel page descriptor",
 		"Set the elfclass (either 32 or 64)",
 		"Set the dump level: all, inuse, user, cache, or kernel",
@@ -2538,6 +2575,8 @@ tovelf(int argc, char *argv[])
 		" addrandomoffset later).",
 		"Override or add new vminfo information",
 		"Convert kernel processes/threads into gdb threads",
+		"Machine is a 64-bit machine",
+		"Machine is a 32-bit machine",
 		NULL
 	};
 	int fd = -1;
@@ -2555,9 +2594,10 @@ tovelf(int argc, char *argv[])
 		VMCI_PAGESIZE(),
 		{ NULL }
 	};
-	int do_oldmem = 0;
+	enum intype intype = INTYPE_PELF;
 	struct velf_data dpage;
 	int elfclass = ELFCLASSNONE;
+	int machineclass = ELFCLASSNONE;
 	int level = DUMP_KERNEL;
 	char *vmlinux = NULL;
 	char *extra_vminfofile = NULL;
@@ -2566,7 +2606,7 @@ tovelf(int argc, char *argv[])
 	memset(d, 0, sizeof(*d));
 	for (;;) {
 		int curr_optind = optind;
-		int c = getopt_long(argc, argv, "+ho:i:v:I:P:c:l:dm:e:p",
+		int c = getopt_long(argc, argv, "+ho:i:v:I:P:c:l:dm:e:p84",
 				    longopts, NULL);
 		if (c == -1)
 			break;
@@ -2588,9 +2628,11 @@ tovelf(int argc, char *argv[])
 			break;
 		case 'I':
 			if (strcmp(optarg, "oldmem") == 0) {
-				do_oldmem = 1;
+				intype = INTYPE_OLDMEM;
 			} else if (strcmp(optarg, "pelf") == 0) {
-				do_oldmem = 0;
+				intype = INTYPE_PELF;
+			} else if (strcmp(optarg, "qemu") == 0) {
+				intype = INTYPE_QEMU;
 			} else {
 				subcmd_usage("Unknown input type: %s\n",
 					     optarg);
@@ -2632,6 +2674,12 @@ tovelf(int argc, char *argv[])
 		case 'd':
 			debug++;
 			break;
+		case '8':
+			machineclass = ELFCLASS64;
+			break;
+		case '4':
+			machineclass = ELFCLASS32;
+			break;
 		case '?':
 			subcmd_usage("Unknown option: %s\n", argv[curr_optind]);
 		}
@@ -2654,11 +2702,11 @@ tovelf(int argc, char *argv[])
 		}
 	}
 
-	if (do_oldmem) {
+	if (intype == INTYPE_OLDMEM) {
 		d->elf = read_oldmem(infile, vmcore, d->extra_vminfo);
 		if (!d->elf)
 			goto out_err;
-	} else {
+	} else if (intype == INTYPE_PELF) {
 		if (!infile)
 			subcmd_usage("No input file specified\n");
 		fd = open(infile, O_RDONLY);
@@ -2679,7 +2727,13 @@ tovelf(int argc, char *argv[])
 			goto out_err;
 		}
 		fd = -1;
-	}
+	} else if (intype == INTYPE_QEMU) {
+		d->elf = read_qemumem(infile, d->extra_vminfo, machineclass);
+		if (!d->elf)
+			goto out_err;
+	} else {
+		assert(1);
+	}	
 
 	rv = handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
 	if (rv)
@@ -2725,6 +2779,10 @@ tovelf(int argc, char *argv[])
 
 	elfc_set_fd(velf, ofd);
 
+	if (elfclass == ELFCLASSNONE)
+		elfclass = d->arch->default_elfclass;
+	elfc_setclass(velf, elfclass);
+
 	if (proc_threads) {
 		struct proc_thread_data ptdata;
 
@@ -2738,12 +2796,6 @@ tovelf(int argc, char *argv[])
 	rv = read_page_maps(d);
 	if (rv == -1)
 		goto out_err;
-
-	if (elfclass == ELFCLASSNONE) {
-		elfc_setclass(velf, d->arch->default_elfclass);
-	} else {
-		elfc_setclass(velf, elfclass);
-	}
 
 	memset(&dpage, 0, sizeof(dpage));
 	dpage.velf = velf;
@@ -3127,7 +3179,7 @@ dumpmem(int argc, char *argv[])
 	int fd = -1;
 	int rv = 0;
 	struct elfc *elf = NULL;
-	int do_oldmem = 0;
+	enum intype intype = 0;
 	GElf_Addr addr;
 	GElf_Addr size;
 	int is_phys = 0;
@@ -3154,9 +3206,9 @@ dumpmem(int argc, char *argv[])
 			break;
 		case 'I':
 			if (strcmp(optarg, "oldmem") == 0) {
-				do_oldmem = 1;
+				intype = INTYPE_OLDMEM;
 			} else if (strcmp(optarg, "pelf") == 0) {
-				do_oldmem = 0;
+				intype = INTYPE_PELF;
 			} else {
 				subcmd_usage("Unknown input type: %s\n",
 					     optarg);
@@ -3212,11 +3264,11 @@ dumpmem(int argc, char *argv[])
 		}
 	}
 
-	if (do_oldmem) {
+	if (intype == INTYPE_OLDMEM) {
 		elf = read_oldmem(infile, vmcore, extra_vminfo);
 		if (!elf)
 			goto out_err;
-	} else {
+	} else if (intype == INTYPE_PELF) {
 		if (!infile)
 			subcmd_usage("No input file specified\n");
 		fd = open(infile, O_RDONLY);
@@ -3237,6 +3289,8 @@ dumpmem(int argc, char *argv[])
 			goto out_err;
 		}
 		fd = -1;
+	} else {
+		assert(1);
 	}
 
 	buf = malloc(size);
@@ -3326,7 +3380,7 @@ virttophys(int argc, char *argv[])
 		VMCI_PAGESIZE(),
 		{ NULL }
 	};
-	int do_oldmem = 0;
+	enum intype intype = INTYPE_PELF;
 	struct velf_data dpage;
 	GElf_Addr addr;
 	char *endc;
@@ -3351,9 +3405,9 @@ virttophys(int argc, char *argv[])
 			break;
 		case 'I':
 			if (strcmp(optarg, "oldmem") == 0) {
-				do_oldmem = 1;
+				intype = INTYPE_OLDMEM;
 			} else if (strcmp(optarg, "pelf") == 0) {
-				do_oldmem = 0;
+				intype = INTYPE_PELF;
 			} else {
 				subcmd_usage("Unknown input type: %s\n",
 					     optarg);
@@ -3403,11 +3457,11 @@ virttophys(int argc, char *argv[])
 		}
 	}
 
-	if (do_oldmem) {
+	if (intype == INTYPE_OLDMEM) {
 		d->elf = read_oldmem(infile, vmcore, d->extra_vminfo);
 		if (!d->elf)
 			goto out_err;
-	} else {
+	} else if (intype == INTYPE_PELF) {
 		if (!infile)
 			subcmd_usage("No input file specified\n");
 		fd = open(infile, O_RDONLY);
@@ -3428,6 +3482,8 @@ virttophys(int argc, char *argv[])
 			goto out_err;
 		}
 		fd = -1;
+	} else {
+		assert(1);
 	}
 
 	rv = handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);

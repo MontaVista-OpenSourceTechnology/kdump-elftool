@@ -334,3 +334,78 @@ document thread_vminfo_i386
 	This is the i386 version.  See thread_vminfo_base for more
 	details.
 end
+
+define vminfo_qemu_base
+	print_opt_sym vmcoreinfo_data
+	printf "OSRELEASE=%s\n", init_uts_ns.name.release
+	printf "SIZE(list_head)=%ld\n", sizeof(struct list_head)
+	printf "OFFSET(list_head.next)=%ld\n", &((struct list_head *) 0)->next
+	printf "OFFSET(list_head.prev)=%ld\n", &((struct list_head *) 0)->prev
+	printf "SYMBOL(_stext)=%lx\n", _stext
+	print_opt_sym idt_table
+	print_opt_sym per_cpu__current_task
+	printf "PAGESIZE=4096\n"
+end
+document vminfo_qemu_base
+	Print out the basic vminfo file needed to read a QEMU
+	memdump.  It must have been compiled with crash dumps
+	on, but a crash kernel doesn't have to be loaded.
+end
+
+define vminfo_qemu_all
+	vminfo_qemu_base
+
+	# CONFIG_NEED_MULTIPLE_NODES
+	print_opt_sym mem_map
+	print_opt_sym contig_page_data
+	print_opt_sym node_data
+	printf "LENGTH(node_data)=??\n"
+	print_opt_length node_data
+	# CONFIG_SPARSEMEM
+	print_opt_sym mem_section
+	printf "LENGTH(mem_section)=??\n"
+	print_opt_size mem_section
+	print_opt_offset mem_section section_mem_map
+	#CONFIG_FLAT_NODE_MEM_MAP
+	print_opt_offset pglist_data node_mem_map
+
+	#Other optional based on kernel version
+	print_opt_offset page _mapcount
+	print_opt_offset page _count
+	# _count was renamed _refcount in 4.6 */
+	print_opt_offset page _refcount
+	print_opt_offset page compound_head
+	print_opt_offset page private
+	print_opt_num PAGE_BUDDY_MAPCOUNT_VALUE
+	print_opt_num PG_poison
+
+	print_opt_size page
+	print_opt_size pglist_data
+	print_opt_size zone
+	print_opt_size free_area
+	print_opt_offset page flags
+	print_opt_offset page mapping
+	print_opt_offset page lru
+	print_opt_offset pglist_data node_zones
+	print_opt_offset pglist_data nr_zones
+	print_opt_offset pglist_data node_start_pfn
+	print_opt_offset pglist_data node_spanned_pages
+	print_opt_offset pglist_data node_id
+	print_opt_offset zone free_area
+	print_opt_offset zone vm_stat
+	print_opt_offset zone spanned_pages
+	printf "LENGTH(zone.free_area)=??\n"
+	print_opt_offset free_area free_list
+	printf "LENGTH(free_area.free_list)=??\n"
+	print_opt_num NR_FREE_PAGES
+	print_opt_num PG_lru
+	print_opt_num PG_slab
+	print_opt_num PG_private
+	print_opt_num PG_swapcache
+end
+document vminfo_qemu_all
+	Dump all the vminfo information needed to process a coredump.
+	Note that the LENGTH fields are not set, there is no way to find
+	them from a vmlinux file, you have to figure them out yourself
+	and set them.
+end
