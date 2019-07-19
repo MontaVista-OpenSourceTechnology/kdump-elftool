@@ -108,6 +108,28 @@ qmem_cmp_key(struct qmem_info val1, struct qmem_info val2)
 #undef btree_cmp_key
 
 
+struct qemu_info;
+struct qemu_device_info;
+
+struct qemu_device_type {
+	const char *name;
+	int (*load)(struct qemu_info *qi, uint8_t section,
+		    struct qemu_device_info *device);
+	unsigned int devinfo_size;
+};
+
+struct qemu_device_info {
+	struct link link;
+
+	const struct qemu_device_type *type;
+
+	unsigned int section_id;
+	unsigned int instance_id;
+	unsigned int version_id;
+
+	void *devinfo;
+};
+
 struct qemu_info {
 	bool is_64bit;
 	bool is_machine_64bit;
@@ -401,35 +423,21 @@ static void
 qmem_free(struct elfc *e, void *data, void *userdata)
 {
 	struct qemu_info *qi = userdata;
+	struct qemu_device_info *device;
+	struct link *tmp;
 
 	if (qi->refcount == 1) {
 		qmem_btree_free(&qi->qmem);
+		list_for_each_item_safe(&qi->devices, device, tmp,
+					struct qemu_device_info, link) {
+		    list_unlink(&device->link);
+		    free(device);
+		}
 		free(qi);
 	} else {
 		qi->refcount--;
 	}
 }
-
-struct qemu_device_info;
-
-struct qemu_device_type {
-	const char *name;
-	int (*load)(struct qemu_info *qi, uint8_t section,
-		    struct qemu_device_info *device);
-	unsigned int devinfo_size;
-};
-
-struct qemu_device_info {
-	struct link link;
-
-	const struct qemu_device_type *type;
-
-	unsigned int section_id;
-	unsigned int instance_id;
-	unsigned int version_id;
-
-	void *devinfo;
-};
 
 static struct qemu_device_info *
 qemu_find_device(struct qemu_info *qi, uint32_t section_id)
@@ -1735,7 +1743,7 @@ read_qemumem(char *vmdump, char *extra_vminfo, int machineclass)
 		textoffset = vmci[5].val - dx86->idt.base;
 
 	rv = dummy_d.arch->setup_arch_pelf(qi->elf, &dummy_d,
-						   &dummy_d.arch_data);
+					   &dummy_d.arch_data);
 	if (rv)
 		goto out_err;
 

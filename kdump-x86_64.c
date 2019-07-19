@@ -294,6 +294,8 @@ x86_64_arch_setup(struct elfc *pelf, struct kdt_data *d, void **arch_data)
 	d->pt_regs_size = sizeof(struct x86_64_pt_regs);
 	d->fetch_ptregs = x86_64_task_ptregs;
 
+	*arch_data = md;
+
 	return 0;
 }
 

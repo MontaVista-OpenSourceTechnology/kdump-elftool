@@ -943,6 +943,20 @@ add_page_range(struct kdt_data *d,
 	return 0;
 }
 
+static void
+free_page_maps(struct kdt_data *d)
+{
+	struct page_range *range;
+	struct link *tmp;
+
+	list_for_each_item_safe(&d->page_maps, range, tmp,
+				struct page_range, link) {
+		list_unlink(&range->link);
+		free(range->bitmap);
+		free(range);
+	}
+}
+
 static int64_t
 process_free_list(struct kdt_data *d, unsigned int order, unsigned char *list)
 {
@@ -1813,6 +1827,26 @@ out_err:
 	return rv;
 }
 
+static void
+free_cpus(struct kdt_data *d)
+{
+	struct cpu_info *cpu;
+
+	while (d->cpus) {
+	    cpu = d->cpus;
+	    d->cpus = cpu->next;
+	    free(cpu);
+	}
+}
+
+static void
+close_if_valid(int fd)
+{
+	if (fd == -1)
+		return;
+	close(fd);
+}
+
 enum intype {
 	INTYPE_OLDMEM,
 	INTYPE_PELF,
@@ -2075,9 +2109,15 @@ out:
 	if (velf)
 		elfc_free(velf);
 	if (d->elf) {
-		close(elfc_get_fd(d->elf));
+		close_if_valid(elfc_get_fd(d->elf));
 		elfc_free(d->elf);
 	}
+	free_cpus(d);
+	free_page_maps(d);
+	if (d->extra_vminfo)
+		free(d->extra_vminfo);
+	if (d->pagedata)
+		free(d->pagedata);
 	if ((ofd != -1) && (ofd != 1))
 		close(ofd);
 	return rv;
@@ -2227,6 +2267,7 @@ add_cpu_info(GElf_Word type, const char *name, size_t namelen,
 
 	return 0;
 }
+
 
 enum thread_info_labels {
 	VMCI_SYMBOL_resume, /* for MIPS */
@@ -2835,9 +2876,15 @@ out:
 	if (velf)
 		elfc_free(velf);
 	if (d->elf) {
-		close(elfc_get_fd(d->elf));
+		close_if_valid(elfc_get_fd(d->elf));
 		elfc_free(d->elf);
 	}
+	free_cpus(d);
+	free_page_maps(d);
+	if (d->extra_vminfo)
+		free(d->extra_vminfo);
+	if (d->pagedata)
+		free(d->pagedata);
 	if ((ofd != -1) && (ofd != 1))
 		close(ofd);
 	return rv;
@@ -3315,7 +3362,7 @@ out:
 	if (fd != -1)
 		close(fd);
 	if (elf) {
-		close(elfc_get_fd(elf));
+		close_if_valid(elfc_get_fd(elf));
 		elfc_free(elf);
 	}
 	return rv;
@@ -3522,9 +3569,15 @@ out:
 	if (fd != -1)
 		close(fd);
 	if (d->elf) {
-		close(elfc_get_fd(d->elf));
+		close_if_valid(elfc_get_fd(d->elf));
 		elfc_free(d->elf);
 	}
+	free_cpus(d);
+	free_page_maps(d);
+	if (d->extra_vminfo)
+		free(d->extra_vminfo);
+	if (d->pagedata)
+		free(d->pagedata);
 	return rv;
 
 out_err:
