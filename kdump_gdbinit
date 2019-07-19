@@ -97,9 +97,39 @@ define ps
 		end
 	end	
 end 
-document ps 
+document ps
 	Print processes and threads.  Threads for a process are indented
 	underneath it, with just the pid and task struct.
+end
+
+define ps_old
+	set $poff=((size_t)&((struct task_struct *)0)->tasks)
+	set $toff=((size_t)&((struct task_struct *)0)->thread_group)
+	set $init_p=(struct task_struct *)&init_task
+	set $p=$init_p
+	printf  "PID\ttty\tCMD\t\tTASK_STRUCT\n"
+
+	while (1)
+		prpid $p
+		set $init_t=&$p->thread_group
+		set $t=$init_t->next
+		while ($t && $t != $init_t)
+			set $tv=(struct task_struct *)(((char *) $t) - $toff)
+			if ($tv != $p)
+				prthread $tv
+			end
+			set $t=$t->next
+		end
+		set $p=(struct task_struct *)((char *)($p->tasks.next) - $poff)
+		if ($p == $init_p)
+			loop_break
+		end
+	end
+end
+document ps_old
+	Print processes and threads.  Threads for a process are indented
+	underneath it, with just the pid and task struct.  This is for
+	older kernels without thread_node in the signal struct.
 end
 
 define lsmod
@@ -137,14 +167,98 @@ document lsmod
 	print list of modules and their info
 end
 
+python
+class PrintOptOffset(gdb.Command):
+   """print offset of arg0.arg1 if arg1 exists in struct arg0."""
+
+   def __init__(self):
+      gdb.Command.__init__(self, "print_opt_offset", gdb.COMMAND_NONE)
+
+   def invoke(self, arg, from_tty):
+      args = gdb.string_to_argv(arg)
+      if len(args) != 2:
+         raise Exception("print_opt_offset takes two arguments")
+      if args[1] in gdb.execute("ptype struct " + args[0], to_string=True):
+         gdb.execute('printf "OFFSET(%s.%s)=%%ld\n", &((struct %s *) 0)->%s'
+	             % (args[0], args[1], args[0], args[1]))
+
+class PrintOptSym(gdb.Command):
+   """print address of the given symbol if it exists."""
+
+   def __init__(self):
+      gdb.Command.__init__(self, "print_opt_sym", gdb.COMMAND_NONE)
+
+   def invoke(self, arg, from_tty):
+      args = gdb.string_to_argv(arg)
+      if len(args) != 1:
+         raise Exception("print_opt_sym takes one argument")
+      try:
+      	 gdb.execute('printf "SYMBOL(%s)=%%p\n", &%s' % (args[0], args[0]))
+      except:
+         pass
+
+class PrintOptLength(gdb.Command):
+   """print length of the given symbol if it exists."""
+
+   def __init__(self):
+      gdb.Command.__init__(self, "print_opt_length", gdb.COMMAND_NONE)
+
+   def invoke(self, arg, from_tty):
+      args = gdb.string_to_argv(arg)
+      if len(args) != 1:
+         raise Exception("print_opt_length takes one argument")
+      try:
+      	 gdb.execute('printf "LENGTH(%s)=%%p\n", sizeof(%s)' % (args[0], args[0]))
+      except:
+         pass
+
+class PrintOptSize(gdb.Command):
+   """print size of the given structure if it exists."""
+
+   def __init__(self):
+      gdb.Command.__init__(self, "print_opt_size", gdb.COMMAND_NONE)
+
+   def invoke(self, arg, from_tty):
+      args = gdb.string_to_argv(arg)
+      if len(args) != 1:
+         raise Exception("print_opt_size takes one argument")
+      try:
+      	 gdb.execute('printf "SIZE(%s)=%%d\n", sizeof(struct %s)' % (args[0], args[0]))
+      except:
+         pass
+
+class PrintOptNum(gdb.Command):
+   """print value of the given numberic value if it exists."""
+
+   def __init__(self):
+      gdb.Command.__init__(self, "print_opt_num", gdb.COMMAND_NONE)
+
+   def invoke(self, arg, from_tty):
+      args = gdb.string_to_argv(arg)
+      if len(args) != 1:
+         raise Exception("print_opt_num takes one argument")
+      try:
+      	 gdb.execute('printf "NUMBER(%s)=%%d\n", (int) %s' % (args[0], args[0]))
+      except:
+         pass
+
+PrintOptOffset()
+PrintOptSym()
+PrintOptNum()
+PrintOptSize()
+PrintOptLength()
+end
+
+
 define thread_vminfo_base
 	printf "SYMBOL(init_task)=%p\n", &init_task
 	printf "OFFSET(task_struct.stack)=%ld\n", &((struct task_struct *) 0)->stack
 	printf "OFFSET(task_struct.tasks)=%ld\n", &((struct task_struct *) 0)->tasks
-	printf "OFFSET(task_struct.thread_node)=%ld\n", &((struct task_struct *) 0)->thread_node
+	printf "OFFSET(task_struct.thread_group)=%ld\n", &((struct task_struct *) 0)->thread_group
+	print_opt_offset task_struct thread_node
+	print_opt_offset signal_struct thread_head
 	printf "OFFSET(task_struct.signal)=%ld\n", &((struct task_struct *) 0)->signal
 	printf "OFFSET(task_struct.pid)=%ld\n", &((struct task_struct *) 0)->pid
-	printf "OFFSET(signal_struct.thread_head)=%ld\n", &((struct signal_struct *) 0)->thread_head
 	printf "OFFSET(task_struct.thread)=%ld\n", &((struct task_struct *) 0)->thread
 	printf "SIZE(pt_regs)=%ld\n", sizeof(struct pt_regs)
 end
@@ -178,7 +292,7 @@ end
 document thread_vminfo_x86_64
 	Dump information required by kdump-elftool to create a gdb thread
 	per kernel thread instead of the default gdb thread per CPU.
-	This is the MIPS version.  See thread_vminfo_base for more
+	This is the x86_64 version.  See thread_vminfo_base for more
 	details.
 
 	Make sure to fix SIZE(context_switch_frame) and possibly
