@@ -6,4 +6,5 @@ kdump_elftool_SOURCES = elfc.c kdump-elftool.c list.c oldmem.c \
 	kdump-arm64.c qemumem.c
 noinst_HEADERS = elfc.h kdump-elftool.h list.h
 man_MANS = kdump-elftool.1
+dist_pkgdata_DATA = kdump_gdbinit
 EXTRA_DIST = $(man_MANS)
