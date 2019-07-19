@@ -38,6 +38,7 @@
 #include <malloc.h>
 
 #include "elfc.h"
+#include "kdump-x86.h"
 
 #define PAGESHIFT_4K		12
 #define PAGEMASK_4K		((1 << PAGESHIFT_4K) - 1)
@@ -292,31 +293,6 @@ handle_pae_pdp(struct elfc *pelf, GElf_Addr pgd,
 	return 0;
 }
 
-struct i386_data
-{
-	bool pae;
-};
-
-struct i386_pt_regs {
-	uint32_t ebx;
-	uint32_t ecx;
-	uint32_t edx;
-	uint32_t esi;
-	uint32_t edi;
-	uint32_t ebp;
-	uint32_t eax;
-	uint32_t xds;
-	uint32_t xes;
-	uint32_t xfs;
-	uint32_t xgs;
-	uint32_t orig_eax;
-	uint32_t eip;
-	uint32_t xcs;
-	uint32_t eflags;
-	uint32_t esp;
-	uint32_t xss;
-};
-
 static int
 i386_task_ptregs(struct kdt_data *d, GElf_Addr task, void *regs)
 {
@@ -385,8 +361,7 @@ i386_arch_setup(struct elfc *pelf, struct kdt_data *d, void **arch_data)
 	else
 		d->max_physmem_bits = 32;
 
-	/* I'm not sure what the 4 bytes at the end is, but it's required. */
-	d->pt_regs_size = sizeof(struct i386_pt_regs) + 4;
+	d->pt_regs_size = sizeof(struct i386_pt_regs);
 	d->fetch_ptregs = i386_task_ptregs;
 
 	*arch_data = md;

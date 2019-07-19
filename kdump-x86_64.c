@@ -38,6 +38,7 @@
 #include <malloc.h>
 
 #include "elfc.h"
+#include "kdump-x86.h"
 
 #define PHYSADDRMASK		0x0000ffffffffffff
 
@@ -211,41 +212,6 @@ handle_pdp(struct elfc *pelf, GElf_Addr vaddr, GElf_Addr pdpaddr,
 	return 0;
 }
 
-struct x86_64_data
-{
-	bool dummy;
-};
-
-struct x86_64_pt_regs {
-	uint64_t r15;
-	uint64_t r14;
-	uint64_t r13;
-	uint64_t r12;
-	uint64_t rbp;
-	uint64_t rbx;
-	uint64_t r11;
-	uint64_t r10;
-	uint64_t r9;
-	uint64_t r8;
-	uint64_t rax;
-	uint64_t rcx;
-	uint64_t rdx;
-	uint64_t rsi;
-	uint64_t rdi;
-	uint64_t orig_rax;
-	uint64_t rip;
-	uint64_t cs;
-	uint64_t eflags;
-	uint64_t rsp;
-	uint64_t ss;
-	uint64_t fs_base;
-	uint64_t gs_base;
-	uint64_t ds;
-	uint64_t es;
-	uint64_t fs;
-	uint64_t gs;
-};
-
 static int
 x86_64_task_ptregs(struct kdt_data *d, GElf_Addr task, void *regs)
 {
@@ -325,8 +291,7 @@ x86_64_arch_setup(struct elfc *pelf, struct kdt_data *d, void **arch_data)
 	d->section_size_bits = 27;
 	d->max_physmem_bits = 46; /* Good for 2.6.31 and later */
 
-	/* I'm not sure what the 8 bytes at the end is, but it's required. */
-	d->pt_regs_size = sizeof(struct x86_64_pt_regs) + 8;
+	d->pt_regs_size = sizeof(struct x86_64_pt_regs);
 	d->fetch_ptregs = x86_64_task_ptregs;
 
 	return 0;
