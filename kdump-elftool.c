@@ -836,7 +836,7 @@ find_page_by_pfn(struct kdt_data *d, struct page_range *range, uint64_t pfn,
 		goto out_err;
 	rv = fetch_struct32(d, d->pagedata, d->size_page,
 			    d->page_mapcount_offset,
-			    &page->mapcount, "page.mapcount");
+			    &page->mapcount, "page._mapcount");
 	if (rv == -1)
 		goto out_err;
 	rv = fetch_structlong(d, d->pagedata, d->size_page,
