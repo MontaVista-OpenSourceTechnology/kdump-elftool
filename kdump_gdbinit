@@ -284,9 +284,8 @@ end
 
 define thread_vminfo_x86_64
 	thread_vminfo_base
-	# Add this in if you don't have it.
-	#printf "SYMBOL(__thread_sleep_point)=0\n"
 	printf "OFFSET(thread_struct.sp)=%ld\n", &((struct thread_struct *) 0)->sp
+	printf "SYMBOL(__thread_sleep_point)=0\n"
 	printf "SIZE(context_switch_frame)=1\n"
 end
 document thread_vminfo_x86_64
