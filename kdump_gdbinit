@@ -344,6 +344,7 @@ define vminfo_qemu_base
 	print_opt_sym idt_table
 	print_opt_sym per_cpu__current_task
 	printf "PAGESIZE=4096\n"
+	print_opt_num NR_FREE_PAGES
 end
 document vminfo_qemu_base
 	Print out the basic vminfo file needed to read a QEMU
@@ -396,7 +397,6 @@ define vminfo_qemu_all
 	printf "LENGTH(zone.free_area)=??\n"
 	print_opt_offset free_area free_list
 	printf "LENGTH(free_area.free_list)=??\n"
-	print_opt_num NR_FREE_PAGES
 	print_opt_num PG_lru
 	print_opt_num PG_slab
 	print_opt_num PG_private
