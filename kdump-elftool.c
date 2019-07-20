@@ -1350,8 +1350,6 @@ read_page_maps(struct kdt_data *d)
 	};
 	int rv;
 
-	list_init(&d->page_maps);
-
 	rv = handle_vminfo_notes(d->elf, vmci, d->extra_vminfo);
 	if (rv)
 		return rv;
@@ -1911,6 +1909,8 @@ topelf(int argc, char *argv[])
 	char *extra_vminfofile = NULL;
 
 	memset(d, 0, sizeof(*d));
+	list_init(&d->page_maps);
+
 	for (;;) {
 		int curr_optind = optind;
 		int c = getopt_long(argc, argv, "+ho:i:I:v:c:l:de:84", longopts,
@@ -2645,6 +2645,8 @@ tovelf(int argc, char *argv[])
 	bool proc_threads = false;
 
 	memset(d, 0, sizeof(*d));
+	list_init(&d->page_maps);
+
 	for (;;) {
 		int curr_optind = optind;
 		int c = getopt_long(argc, argv, "+ho:i:v:I:P:c:l:dm:e:p84",
@@ -3434,6 +3436,8 @@ virttophys(int argc, char *argv[])
 	char *extra_vminfofile = NULL;
 
 	memset(d, 0, sizeof(*d));
+	list_init(&d->page_maps);
+
 	for (;;) {
 		int curr_optind = optind;
 		int c = getopt_long(argc, argv, "+ho:i:v:I:P:c:l:de:", longopts,
