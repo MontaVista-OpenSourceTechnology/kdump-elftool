@@ -192,7 +192,7 @@ memory is not yet paged in or has been paged out, it will not be
 present.
 .TP
 .I "\-\-elfclass|-c 32|64"
-All physical memory coredump are 64-bit because many 32-bit
+All physical memory coredumps are 64-bit because many 32-bit
 architectures can map physical addresses greater than 32-bits (like
 x86 PAE).  For architectures, like MIPS, where the kernel may be 32 or
 64 bits, you have to set the class to 32 bits if you have a 32-bit
@@ -360,10 +360,10 @@ Just keep hitting return until you find a call to __switch_to, like:
 0xffffffff81744526 <__schedule+662>:	mov    %gs:0x9900,%rsi
 .RE
 
-Get the location of the instruction right before the callq and add:
+Get the location of the instruction right after the callq and add:
 
 .RS 4
-SYMBOL(__thread_sleep_point)=ffffffff8174451a
+SYMBOL(__thread_sleep_point)=ffffffff81744526
 .RE
 
 to your thread_vminfo file.
