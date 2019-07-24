@@ -31,6 +31,10 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+/*
+ * A lot of this was lifted from the crash utility's qemu dump code.
+ */
+
 #include "kdump-elftool.h"
 
 #include <stdio.h>
