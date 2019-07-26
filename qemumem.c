@@ -46,7 +46,6 @@
 #include <errno.h>
 #include <string.h>
 #include <setjmp.h>
-#include <sys/mman.h>
 #include <signal.h>
 #include <assert.h>
 
