@@ -12,12 +12,48 @@ data passed from the old kernel to the new kernel.  The MIPS-specific
 patch is only required for MIPS, obviously, it adds a boatload of
 parameters that are required to successfully navigate the page tables.
 
+Building
+========
+
+Build Requirements
+------------------
+
+The libelf developement package must be installed.  Only the include
+files are used, the libelf library itself is not used.
+
+autoconf, automake, and libtool must be installed if you download
+from git directly.
+
+kdump-elftool has no other external requirements beyond the standard
+library.
+
+Setting up autotools
+--------------------
+
+If you download this program directly from git, it will not be
+set up properly.  You must run the following commands to set it
+up so it can be configured and built:
+
+  libtoolize
+  aclocal
+  autoconf
+  autoheader
+  automake -a
+
+If you download a tar file with the program, it most likely already
+has done this, so you can skip to the next section.
+
+Then see the install program for standard autotools instructions.
+
+Getting a Kernel Coredump
+=========================
+
 To use this, you must get a dump of kernel memory.  You have two options:
 use kexec/kdump, or take a vmdump from qemu if you are running in
 qemu.
 
 kexec/kdump
-===========
+-----------
 
 For kexec/kdump see the man page for kexec for instructions to get
 into a crash dump kernel (the kernel that boots from the crashed
@@ -56,7 +92,7 @@ to add the information to an existing vmcore file.  This will replace
 any existing offset information.
 
 qemu
-====
+----
 
 To save a vmdump from the qemu console, run the command:
 
