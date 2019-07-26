@@ -5,4 +5,6 @@ AM_PROG_LIBTOOL
 AC_CONFIG_MACRO_DIR([m4])
 AC_STDC_HEADERS
 AC_CONFIG_HEADER([config.h])
+AC_CHECK_HEADER([gelf.h], [],
+                [AC_MSG_ERROR([gelf.h not found, please install the libelf developement package])])
 AC_OUTPUT([Makefile])
