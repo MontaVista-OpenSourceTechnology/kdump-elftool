@@ -433,6 +433,17 @@ that it can.  There are some length fields that are not filled in,
 though.  You will need to fill those values in yourself.  They are
 marked with "??".
 
+.SH KERNEL MODULES
+
+To make module symbols available to gdb, you have to load the module
+symbols.  To do this, use lsmod to dump a list of the modules, get the
+"Base Addr" for the module you are interested in, and run the command:
+.RS 4
+add-symbol-file <module .o> <Base Addr>
+.RE
+Note that you use the .o file, not the .ko file, for the module, and
+the module must match the kernel, of course.
+
 .SH FILES
 /dev/mem, /proc/vmcore
 

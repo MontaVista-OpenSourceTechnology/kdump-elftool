@@ -184,3 +184,15 @@ following are available:
 
   lsmod - List modules and their bases.  This is useful for loading
      symbol tables from module .o files.
+
+Modules
+-------
+
+To make module symbols available to gdb, you have to load the module
+symbols.  To do this, use lsmod to dump a list of the modules, get the
+"Base Addr" for the module you are interested in, and run the command:
+
+  add-symbol-file <module .o> <Base Addr>
+
+Note that you use the .o file, not the .ko file, for the module, and
+the module must match the kernel, of course.
