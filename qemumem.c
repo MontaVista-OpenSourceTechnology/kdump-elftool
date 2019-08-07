@@ -1640,7 +1640,7 @@ read_qemumem(char *vmdump, char *extra_vminfo, int machineclass)
 	int endc;
 
 	if (!extra_vminfo) {
-		fprintf(stderr, "qemu will no work without extravminfo\n");
+		fprintf(stderr, "qemu will not work without extravminfo\n");
 		return NULL;
 	}
 
@@ -1800,11 +1800,18 @@ read_qemumem(char *vmdump, char *extra_vminfo, int machineclass)
 out_err:
 	if (dummy_d.arch_data)
 		dummy_d.arch->cleanup_arch_data(dummy_d.arch_data);
-	if (qi->elf)
-		elfc_free(qi->elf);
-	if (qi->f)
-		fclose(qi->f);
-	qmem_btree_free(&qi->qmem);
-	free(qi);
+
+	/* Once we set some phdr data, freeing qi->elf will free everything. */
+	if (!qi->refcount) {
+		if (qi->f)
+			fclose(qi->f);
+		qmem_btree_free(&qi->qmem);
+		free(qi);
+		if (qi->elf)
+			elfc_free(qi->elf);
+	} else {
+		if (qi->elf)
+			elfc_free(qi->elf);
+	}
 	return NULL;
 }
