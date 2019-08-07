@@ -1848,7 +1848,8 @@ close_if_valid(int fd)
 enum intype {
 	INTYPE_OLDMEM,
 	INTYPE_PELF,
-	INTYPE_QEMU
+	INTYPE_QEMU,
+	INTYPE_MAKEDUMPFILE
 };
 
 static int
@@ -1875,7 +1876,8 @@ topelf(int argc, char *argv[])
 	static const char *helpstr[] = {
 		"This info",
 		"File to use for raw memory (like /dev/mem), unused by default",
-		"The file type, either oldmem or qemu, defaults to oldmem",
+		"The file type, either oldmem, qemu, or makedumpfile,"
+		" defaults to oldmem",
 		"File send output to instead of stdout",
 		"The vmcore file, defaults to /proc/vmcore",
 		"Set the elfclass (either 32 or 64)",
@@ -1929,6 +1931,8 @@ topelf(int argc, char *argv[])
 				intype = INTYPE_OLDMEM;
 			} else if (strcmp(optarg, "qemu") == 0) {
 				intype = INTYPE_QEMU;
+			} else if (strcmp(optarg, "makedumpfile") == 0) {
+				intype = INTYPE_MAKEDUMPFILE;
 			} else {
 				subcmd_usage("Unknown input type: %s\n",
 					     optarg);
@@ -1993,6 +1997,19 @@ topelf(int argc, char *argv[])
 		d->elf = read_oldmem(infile, vmcore, d->extra_vminfo);
 	} else if (intype == INTYPE_QEMU) {
 		d->elf = read_qemumem(infile, d->extra_vminfo, machineclass);
+	} else if (intype == INTYPE_MAKEDUMPFILE) {
+		struct absio *io = read_rawfile(infile), *io2;
+
+		if (!io)
+			goto out_err;
+		io2 = read_makedumpfile(io);
+		if (!io2) {
+			io->free(io);
+			goto out_err;
+		}
+		d->elf = read_diskdumpmem(io2, d->extra_vminfo);
+		if (!d->elf)
+			io2->free(io2);
 	} else {
 		assert(1);
 	}
@@ -2676,6 +2693,8 @@ tovelf(int argc, char *argv[])
 				intype = INTYPE_PELF;
 			} else if (strcmp(optarg, "qemu") == 0) {
 				intype = INTYPE_QEMU;
+			} else if (strcmp(optarg, "makedumpfile") == 0) {
+				intype = INTYPE_MAKEDUMPFILE;
 			} else {
 				subcmd_usage("Unknown input type: %s\n",
 					     optarg);
@@ -2774,6 +2793,21 @@ tovelf(int argc, char *argv[])
 		d->elf = read_qemumem(infile, d->extra_vminfo, machineclass);
 		if (!d->elf)
 			goto out_err;
+	} else if (intype == INTYPE_MAKEDUMPFILE) {
+		struct absio *io = read_rawfile(infile), *io2;
+
+		if (!io)
+			goto out_err;
+		io2 = read_makedumpfile(io);
+		if (!io2) {
+			io->free(io);
+			goto out_err;
+		}
+		d->elf = read_diskdumpmem(io2, d->extra_vminfo);
+		if (!d->elf) {
+			io2->free(io2);
+			goto out_err;
+		}
 	} else {
 		assert(1);
 	}	

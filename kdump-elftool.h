@@ -55,6 +55,19 @@ int parse_memrange(const char *str, uint64_t *start, uint64_t *size);
 void pr_err(const char *fmt, ...);
 
 /*
+ * Abstract I/O for reading layered dumps (like makedumpfile)
+ */
+struct absio {
+    int (*read)(struct absio *io, off_t addr, size_t size, void *buf);
+    void (*free)(struct absio *io);
+};
+#define absio_read(io, addr, size, buf) \
+    io->read(io, addr, size, buf)
+
+struct absio *read_makedumpfile(struct absio *subio);
+struct absio *read_rawfile(char *file);
+
+/*
  * Copy all the notes from in to out.
  */
 int copy_elf_notes(struct elfc *out, struct elfc *in,
@@ -152,6 +165,7 @@ void add_arch(struct archinfo *arch);
 
 struct elfc *read_oldmem(char *oldmem, char *vmcore, char *extra_vminfo);
 struct elfc *read_qemumem(char *vmdump, char *extra_vminfo, int machineclass);
+struct elfc *read_diskdumpmem(struct absio *io, char *extra_vminfo);
 
 int fetch_vaddr_data_err(struct kdt_data *d, GElf_Addr addr, unsigned int len,
 			 void *out, char *name);

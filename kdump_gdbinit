@@ -345,6 +345,8 @@ define vminfo_qemu_base
 	print_opt_sym per_cpu__current_task
 	printf "PAGESIZE=4096\n"
 	print_opt_num NR_FREE_PAGES
+	print_opt_sym swapper_pg_dir
+	print_opt_sym init_level4_pgt
 end
 document vminfo_qemu_base
 	Print out the basic vminfo file needed to read a QEMU

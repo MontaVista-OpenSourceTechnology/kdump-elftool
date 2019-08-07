@@ -48,9 +48,9 @@ Then see the install program for standard autotools instructions.
 Getting a Kernel Coredump
 =========================
 
-To use this, you must get a dump of kernel memory.  You have two options:
-use kexec/kdump, or take a vmdump from qemu if you are running in
-qemu.
+To use this, you must get a dump of kernel memory.  You have two
+options: use kexec/kdump (optionally with makedumpfile), or take a
+vmdump from qemu if you are running in qemu.
 
 kexec/kdump
 -----------
@@ -90,6 +90,18 @@ option to running tovelf, all is not lost.  You can do:
 
 to add the information to an existing vmcore file.  This will replace
 any existing offset information.
+
+makedumpfile
+------------
+
+If you have a dump taken with makedumpfile, kdump-elftool might be
+able to read it.  Currently it only works with x86_64, but adding
+new machines should be simple.
+
+You might have to add a vminfo file if the dump file does not have
+vmcoreinfo data in it, the tool will tell you if that is the case.
+This is the same procedure as getting the vminfo file in qemu
+below.
 
 qemu
 ----
