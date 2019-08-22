@@ -425,6 +425,7 @@ read_diskdumpmem(struct absio *io, char *extra_vminfo)
 		{ "OFFSET(task_struct.pid)", 10 },	/* 8 */
 		{ "SYMBOL(swapper_pg_dir)", 16 },	/* 9 */
 		{ "SYMBOL(init_level4_pgt)", 16 },	/* 10 */
+		{ "SYMBOL(init_top_pgt)", 16 },		/* 11 */
 		{ NULL }
 	};
 	struct kdt_data dummy_d;
@@ -682,9 +683,11 @@ read_diskdumpmem(struct absio *io, char *extra_vminfo)
 		dummy_d.pgd = vmci[9].val - start_kernel + di->subhdr.phys_base;
 	} else if (vmci[10].found) {
 		dummy_d.pgd = vmci[10].val - start_kernel +di->subhdr.phys_base;
+	} else if (vmci[11].found) {
+		dummy_d.pgd = vmci[11].val - start_kernel +di->subhdr.phys_base;
 	} else {
-		fprintf(stderr, "No swapper_pg_dir or init_level4_pgd in "
-			"vminfo, can't get pgd.\n");
+		fprintf(stderr, "No swapper_pg_dir or init_level4_pgd or "
+			"init_top_pgt in vminfo, can't get pgd.\n");
 		goto out_err;
 	}
 
