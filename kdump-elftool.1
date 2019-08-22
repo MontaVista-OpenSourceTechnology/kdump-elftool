@@ -328,7 +328,24 @@ Get the location of the instruction right after the callq and add:
 SYMBOL(__thread_sleep_point)=ffffffff81744526
 .RE
 
-to your thread_vminfo file.
+to your thread_vminfo file.  Some versions of gdb might not
+continue the action after hitting return, and the call to
+__switch_to can be way down there.  So it might be best to
+do:
+
+.RS 4
+x/1000i __schedule
+.RE
+
+and hunt until you find it.  It might be easier to do
+
+.RS 4
+set height 0
+.RE
+
+and do the "x/1000i", and then cut and paste the output to a file so
+you can use an editor to search for __switch_to and the operations on
+rsp that are talked about later.
 
 Note that __schedule may not call __switch_to.  You will have to
 find the function that __schedule calls that calls __switch_to,
