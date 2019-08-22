@@ -293,49 +293,10 @@ switch, and that would slow down context switches a little so it's
 frowned upon.  So to get this, you must calculate the frame size
 of __schedule and set that in thread_vminfo file.
 
-To calculate it, load the vmlinux file into gdb (as before) and do
-
-.RS 4
-x/20i __schedule
-.RE
-
-You should see something like:
-
-.RS 4
-0xffffffff81744290 <__schedule>:	push   %rbp
-.br
-0xffffffff81744291 <__schedule+1>:	mov    $0xdf40,%rax
-.br
-0xffffffff81744298 <__schedule+8>:	mov    %gs:0x9908,%rdx
-.br
-0xffffffff817442a1 <__schedule+17>:	mov    %rsp,%rbp
-.br
-0xffffffff817442a4 <__schedule+20>:	push   %r15
-.br
-0xffffffff817442a6 <__schedule+22>:	push   %r14
-.br
-0xffffffff817442a8 <__schedule+24>:	push   %r13
-.br
-0xffffffff817442aa <__schedule+26>:	push   %r12
-.br
-0xffffffff817442ac <__schedule+28>:	push   %rbx
-.br
-0xffffffff817442ad <__schedule+29>:	sub    $0x48,%rsp
-.RE
-
-You need to count how much the stack is decremented here after the
-push of %rbp.  On x86_64, each push is 8 bytes, then you see a direct
-subtraction from %rsp.  So there are five pushes and then another 72
-(0x48) bytes subtracted, so this is 72 + (5 * 8), or 112 bytes.  Then
-set the
-
-.RS 4
-SIZE(context_switch_frame)=1
-.RE
-
-in your thread_vminfo file from one to the value you calculate.  Be
-careful, there may be sneaky pushes around __switch_to that you may
-have to account for, too.
+The first thing to do, though, is to find the location of the
+__switch_to call.  It's normally in the __schedule function, but
+it may be in another function called from __schedule, like
+__schedule_nobkl.
 
 If you have the x86 patch in the kernel-patches directory applied to
 your kernel, then it should contain the code to add the context switch
@@ -372,6 +333,57 @@ to your thread_vminfo file.
 Note that __schedule may not call __switch_to.  You will have to
 find the function that __schedule calls that calls __switch_to,
 (like __schedule_nobkl) and do the procedure in that function.
+
+Now that you know where __switch_to is called from, you need to
+calculate the amount of stack used in that function at the point where
+__switch_to is called, so the program can properly calculate the value
+of BP.  To calculate it, load the vmlinux file into gdb (as before)
+and do
+
+.RS 4
+x/20i __schedule
+.RE
+
+(or __schedule_nobkl, or whatever function contains __switch_to).
+You should see something like:
+
+.RS 4
+0xffffffff81744290 <__schedule>:	push   %rbp
+.br
+0xffffffff81744291 <__schedule+1>:	mov    $0xdf40,%rax
+.br
+0xffffffff81744298 <__schedule+8>:	mov    %gs:0x9908,%rdx
+.br
+0xffffffff817442a1 <__schedule+17>:	mov    %rsp,%rbp
+.br
+0xffffffff817442a4 <__schedule+20>:	push   %r15
+.br
+0xffffffff817442a6 <__schedule+22>:	push   %r14
+.br
+0xffffffff817442a8 <__schedule+24>:	push   %r13
+.br
+0xffffffff817442aa <__schedule+26>:	push   %r12
+.br
+0xffffffff817442ac <__schedule+28>:	push   %rbx
+.br
+0xffffffff817442ad <__schedule+29>:	sub    $0x48,%rsp
+.RE
+
+You need to count how much the stack is decremented here after the
+push of %rbp.  On x86_64, each push is 8 bytes, then you see a direct
+subtraction from %rsp.  So there are five pushes and then another 72
+(0x48) bytes subtracted, so this is 72 + (5 * 8), or 112 bytes.  Then
+set the
+
+.RS 4
+SIZE(context_switch_frame)=1
+.RE
+
+in your thread_vminfo file from one to the value you calculate.  Be
+careful, there may be sneaky pushes around __switch_to that you may
+have to account for, too.  So keep looking and scanning for pushes,
+pops, and modifications to the rsp register.  If you don't calculate
+this correctly, the backtraces won't make any sense.
 
 .SH QEMU VMDUMP
 kdump-elftool can process QEMU vmdump file from i386 and x86_64
