@@ -46,6 +46,31 @@ document dmesg
 	print the kernel log buffer
 end
 
+define dmesg_old
+	set $idx = log_first_idx
+	while $idx != log_next_idx
+		set $entry = (struct log *)(log_buf + $idx)
+		if $entry->len == 0
+			set $idx = 0
+			loop_continue
+		end
+		set $usecs = $entry->ts_nsec / 1000
+		printf "[%05lu.%06lu] ", $usecs / 1000000, $usecs % 1000000
+		set $msg = (char *)($entry + 1)
+		set $i = 0
+		while $i < $entry->text_len
+			printf "%c", *($msg + $i)
+			set $i = $i + 1
+		end
+		printf "\n"
+		set $idx += $entry->len
+	end
+end
+document dmesg_old
+	print the kernel log buffer on older kernel with struct log
+	instead of struct printk_log
+end
+
 define prpid
 	set $t=$arg0
 	set $signal = (struct signal_struct *)($t->signal)
