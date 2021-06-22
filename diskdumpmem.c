@@ -598,7 +598,7 @@ read_diskdumpmem(struct absio *io, char *extra_vminfo)
 		
 	}
 
-	if (!di->subhdr.size_vmcoreinfo == 0 && !extra_vminfo) {
+	if (di->subhdr.size_vmcoreinfo == 0 && !extra_vminfo) {
 		fprintf(stderr, "No vmcoreinfo in makedump, must supply on the "
 			"command line\n");
 		goto out_err;
