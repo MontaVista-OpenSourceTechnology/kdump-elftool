@@ -204,7 +204,7 @@ class PrintOptOffset(gdb.Command):
       if len(args) != 2:
          raise Exception("print_opt_offset takes two arguments")
       if args[1] in gdb.execute("ptype struct " + args[0], to_string=True):
-         gdb.execute('printf "OFFSET(%s.%s)=%%ld\n", &((struct %s *) 0)->%s'
+         gdb.execute('printf "OFFSET(%s.%s)=%%ld\\n", &((struct %s *) 0)->%s'
 	             % (args[0], args[1], args[0], args[1]))
 
 class PrintOptSym(gdb.Command):
@@ -218,7 +218,7 @@ class PrintOptSym(gdb.Command):
       if len(args) != 1:
          raise Exception("print_opt_sym takes one argument")
       try:
-      	 gdb.execute('printf "SYMBOL(%s)=%%p\n", &%s' % (args[0], args[0]))
+         gdb.execute('printf "SYMBOL(%s)=%%p\\n", &%s' % (args[0], args[0]))
       except:
          pass
 
@@ -233,7 +233,7 @@ class PrintOptLength(gdb.Command):
       if len(args) != 1:
          raise Exception("print_opt_length takes one argument")
       try:
-      	 gdb.execute('printf "LENGTH(%s)=%%p\n", sizeof(%s)' % (args[0], args[0]))
+         gdb.execute('printf "LENGTH(%s)=%%p\\n", sizeof(%s)' % (args[0], args[0]))
       except:
          pass
 
@@ -248,7 +248,7 @@ class PrintOptSize(gdb.Command):
       if len(args) != 1:
          raise Exception("print_opt_size takes one argument")
       try:
-      	 gdb.execute('printf "SIZE(%s)=%%d\n", sizeof(struct %s)' % (args[0], args[0]))
+          gdb.execute('printf "SIZE(%s)=%%d\n", sizeof(struct %s)' % (args[0], args[0]))
       except:
          pass
 
@@ -263,7 +263,7 @@ class PrintOptNum(gdb.Command):
       if len(args) != 1:
          raise Exception("print_opt_num takes one argument")
       try:
-      	 gdb.execute('printf "NUMBER(%s)=%%d\n", (int) %s' % (args[0], args[0]))
+         gdb.execute('printf "NUMBER(%s)=%%d\\n", (int) %s' % (args[0], args[0]))
       except:
          pass
 
