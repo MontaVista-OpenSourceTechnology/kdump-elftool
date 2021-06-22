@@ -2944,6 +2944,7 @@ addrandomoffset(int argc, char *argv[])
 		VMCI_OFFSET(list_head, next),
 		VMCI_OFFSET(list_head, prev),
 		VMCI_SYMBOL(_stext),
+		VMCI_PAGESIZE(),
 		{ NULL }
 	};
 	static const struct option longopts[] = {
@@ -3460,6 +3461,7 @@ virttophys(int argc, char *argv[])
 		VMCI_SIZE(list_head),
 		VMCI_OFFSET(list_head, next),
 		VMCI_OFFSET(list_head, prev),
+		VMCI_SYMBOL(_stext),
 		VMCI_PAGESIZE(),
 		{ NULL }
 	};
