@@ -65,6 +65,7 @@ struct elfc_note {
 
 struct elfc_phdr {
 	GElf_Phdr p;
+	int idx;
 	void *data;
 	void *userdata;
 	void (*data_free)(struct elfc *e, void *data, void *userdata);
@@ -81,6 +82,36 @@ struct elfc_phdr {
 			GElf_Off off,
 			const void *idata, size_t len, void *userdata);
 };
+
+/* A btree to hold phdrs indexed by physical_address. */
+#define BTREE_NODE_SIZE 10
+#define btree_val_t struct elfc_phdr *
+#define BTREE_NAMES_LOCAL static
+#define BTREE_EXPORT_NAME(s) phdr_phys_ ## s
+#define btree_t phdr_phys_btree
+#define btree_cmp_key phdr_phys_cmp
+#define BTREE_NEEDS 0
+
+int
+phdr_phys_cmp(struct elfc_phdr *val1, struct elfc_phdr *val2)
+{
+	if (val1->p.p_paddr > val2->p.p_paddr + val2->p.p_filesz - 1)
+		return 1;
+	if (val2->p.p_paddr > val1->p.p_paddr + val1->p.p_filesz - 1)
+		return -1;
+	return 0;
+}
+
+#include "btree.h"
+
+#undef BTREE_EXPORT_NAME
+#undef btree_t
+#undef btree_cmp_key
+#undef BTREE_NEEDS
+#undef BTREE_NODE_SIZE
+#undef btree_val_t
+#undef BTREE_NAMES_LOCAL
+
 
 struct elfc_shdr {
 	GElf_Shdr sh;
@@ -110,9 +141,10 @@ struct elfc {
 
 	GElf_Off after_headers;
 
-	struct elfc_phdr *phdrs;
+	struct elfc_phdr **phdrs;
 	Elf32_Word num_phdrs;
 	int alloced_phdrs;
+	phdr_phys_btree phdr_tree;
 
 	/*
 	 * We only hold a dummy section header for putting the
@@ -161,7 +193,7 @@ static int
 extend_phdrs(struct elfc *e)
 {
 	if (e->num_phdrs == e->alloced_phdrs) {
-		struct elfc_phdr *phdrs;
+		struct elfc_phdr **phdrs;
 
 		phdrs = malloc(sizeof(*phdrs) * (e->alloced_phdrs + 32));
 		if (!phdrs) {
@@ -184,24 +216,49 @@ elfc_insert_phdr(struct elfc *e, int pnum,
 		 GElf_Word align)
 {
 	GElf_Off offset = 0;
+	int i, rv;
+	struct elfc_phdr *p;
 
 	if (pnum > (e->num_phdrs + 1)) {
 		e->eerrno = EINVAL;
 		return -1;
 	}
 
-	if (extend_phdrs(e) == -1)
+	p = malloc(sizeof(*p));
+	if (!p) {
+		e->eerrno = ENOMEM;
 		return -1;
+	}
+	memset(p, 0, sizeof(*p));
+
+	if (extend_phdrs(e) == -1) {
+		free(p);
+		e->eerrno = ENOMEM;
+		return -1;
+	}
+
+#define PhdrE(type, name) p->p.p_ ## name = name;
+	Phdr64_Entries;
+#undef PhdrE
+
+	if (type == PT_LOAD) {
+		rv = phdr_phys_add(&e->phdr_tree, p);
+		if (rv) {
+			free(p);
+			e->eerrno = ENOMEM;
+			return -1;
+		}
+	}
 
 	memmove(e->phdrs + pnum + 1, e->phdrs + pnum,
 		sizeof(*e->phdrs) * (e->num_phdrs - pnum));
 
-	memset(e->phdrs + pnum, 0, sizeof(*e->phdrs));
-
-#define PhdrE(type, name) e->phdrs[pnum].p.p_ ## name = name;
-	Phdr64_Entries;
-#undef PhdrE
+	e->phdrs[pnum] = p;
 	e->num_phdrs++;
+
+	for (i = pnum; i < e->num_phdrs; i++)
+		e->phdrs[i]->idx = i;
+
 	return pnum;
 }
 
@@ -212,16 +269,38 @@ elfc_add_phdr(struct elfc *e,
 	      GElf_Word align)
 {
 	GElf_Off offset = 0;
-	int i;
+	struct elfc_phdr *p;
+	int i, rv;
 
-	if (extend_phdrs(e) == -1)
+	p = malloc(sizeof(*p));
+	if (!p) {
+		e->eerrno = ENOMEM;
 		return -1;
+	}
+	memset(p, 0, sizeof(*p));
 
-	i = e->num_phdrs;
-	memset(&e->phdrs[i], 0, sizeof(e->phdrs[i]));
-#define PhdrE(type, name) e->phdrs[i].p.p_ ## name = name;
+	if (extend_phdrs(e) == -1) {
+		free(p);
+		e->eerrno = ENOMEM;
+		return -1;
+	}
+
+#define PhdrE(type, name) p->p.p_ ## name = name;
 	Phdr64_Entries;
 #undef PhdrE
+
+	if (type == PT_LOAD) {
+		rv = phdr_phys_add(&e->phdr_tree, p);
+		if (rv) {
+			free(p);
+			e->eerrno = ENOMEM;
+			return -1;
+		}
+	}
+
+	i = e->num_phdrs;
+	e->phdrs[i] = p;
+	p->idx = i;
 	e->num_phdrs++;
 	return i;
 }
@@ -229,17 +308,23 @@ elfc_add_phdr(struct elfc *e,
 int
 elfc_del_phdr(struct elfc *e, int pnum)
 {
+	int i;
+
 	if (pnum >= e->num_phdrs) {
 		e->eerrno = EINVAL;
 		return -1;
 	}
 
-	if (e->phdrs[pnum].data_free)
-		e->phdrs[pnum].data_free(e, e->phdrs[pnum].data,
-					 e->phdrs[pnum].userdata);
+	if (e->phdrs[pnum]->data_free)
+		e->phdrs[pnum]->data_free(e, e->phdrs[pnum]->data,
+					 e->phdrs[pnum]->userdata);
 	memmove(e->phdrs + pnum, e->phdrs + pnum + 1,
 		sizeof(*e->phdrs) * (e->num_phdrs - pnum - 1));
 	e->num_phdrs--;
+
+	for (i = pnum; i < e->num_phdrs; i++)
+		e->phdrs[i]->idx = i;
+
 	return 0;
 }
 
@@ -643,17 +728,17 @@ elfc_set_phdr_data(struct elfc *e, int pnum, void *data,
 		return -1;
 	}
 
-	if (e->phdrs[pnum].data_free)
-		e->phdrs[pnum].data_free(e, e->phdrs[pnum].data,
-					 e->phdrs[pnum].userdata);
-	e->phdrs[pnum].data = data;
-	e->phdrs[pnum].data_free = free_func;
-	e->phdrs[pnum].pre_write = pre_write;
-	e->phdrs[pnum].do_write = do_write;
-	e->phdrs[pnum].post_write = post_write;
-	e->phdrs[pnum].get_data = get_data;
-	e->phdrs[pnum].set_data = set_data;
-	e->phdrs[pnum].userdata = userdata;
+	if (e->phdrs[pnum]->data_free)
+		e->phdrs[pnum]->data_free(e, e->phdrs[pnum]->data,
+					  e->phdrs[pnum]->userdata);
+	e->phdrs[pnum]->data = data;
+	e->phdrs[pnum]->data_free = free_func;
+	e->phdrs[pnum]->pre_write = pre_write;
+	e->phdrs[pnum]->do_write = do_write;
+	e->phdrs[pnum]->post_write = post_write;
+	e->phdrs[pnum]->get_data = get_data;
+	e->phdrs[pnum]->set_data = set_data;
+	e->phdrs[pnum]->userdata = userdata;
 	return 0;
 }
 
@@ -670,7 +755,7 @@ elfc_get_phdr_offset(struct elfc *e, int pnum, GElf_Off *off)
 		e->eerrno = EINVAL;
 		return -1;
 	}
-	*off = e->phdrs[pnum].p.p_offset;
+	*off = e->phdrs[pnum]->p.p_offset;
 	return 0;
 }
 
@@ -681,7 +766,7 @@ elfc_get_phdr(struct elfc *e, int pnum, GElf_Phdr *hdr)
 		e->eerrno = EINVAL;
 		return -1;
 	}
-	*hdr = e->phdrs[pnum].p;
+	*hdr = e->phdrs[pnum]->p;
 	return 0;
 }
 
@@ -692,7 +777,7 @@ elfc_set_phdr_offset(struct elfc *e, int pnum, GElf_Off offset)
 		e->eerrno = EINVAL;
 		return -1;
 	}
-	e->phdrs[pnum].p.p_offset = offset;
+	e->phdrs[pnum]->p.p_offset = offset;
 	return 0;
 }
 
@@ -706,12 +791,14 @@ elfc_phdr_read(struct elfc *e, int pnum, GElf_Off off,
 		e->eerrno = EINVAL;
 		return -1;
 	}
-	if (!e->phdrs[pnum].get_data) {
+	if (!e->phdrs[pnum]->get_data) {
 		e->eerrno = ENOSYS;
 		return -1;
 	}
-	rv = e->phdrs[pnum].get_data(e, &e->phdrs[pnum].p, e->phdrs[pnum].data,
-				     off, odata, len, e->phdrs[pnum].userdata);
+	rv = e->phdrs[pnum]->get_data(e, &e->phdrs[pnum]->p,
+				      e->phdrs[pnum]->data,
+				      off, odata, len,
+				      e->phdrs[pnum]->userdata);
 	if (rv)
 		e->eerrno = errno;
 	return rv;
@@ -727,12 +814,14 @@ elfc_phdr_write(struct elfc *e, int pnum, GElf_Off off,
 		e->eerrno = EINVAL;
 		return -1;
 	}
-	if (!e->phdrs[pnum].set_data) {
+	if (!e->phdrs[pnum]->set_data) {
 		e->eerrno = ENOSYS;
 		return -1;
 	}
-	rv = e->phdrs[pnum].set_data(e, &e->phdrs[pnum].p, e->phdrs[pnum].data,
-				     off, odata, len, e->phdrs[pnum].userdata);
+	rv = e->phdrs[pnum]->set_data(e, &e->phdrs[pnum]->p,
+				      e->phdrs[pnum]->data,
+				      off, odata, len,
+				      e->phdrs[pnum]->userdata);
 	if (rv)
 		e->eerrno = errno;
 	return rv;
@@ -749,7 +838,7 @@ elfc_phdr_alloc_read(struct elfc *e, int pnum, GElf_Off off,
 		e->eerrno = EINVAL;
 		return -1;
 	}
-	if (!e->phdrs[pnum].get_data) {
+	if (!e->phdrs[pnum]->get_data) {
 		e->eerrno = ENOSYS;
 		return -1;
 	}
@@ -758,8 +847,9 @@ elfc_phdr_alloc_read(struct elfc *e, int pnum, GElf_Off off,
 		e->eerrno = ENOMEM;
 		return -1;
 	}
-	rv = e->phdrs[pnum].get_data(e, &e->phdrs[pnum].p, e->phdrs[pnum].data,
-				     off, buf, len, e->phdrs[pnum].userdata);
+	rv = e->phdrs[pnum]->get_data(e, &e->phdrs[pnum]->p,
+				      e->phdrs[pnum]->data,
+				      off, buf, len, e->phdrs[pnum]->userdata);
 	if (rv) {
 		free(buf);
 		e->eerrno = errno;
@@ -1326,7 +1416,7 @@ elfc_file_size(struct elfc *e)
 	GElf_Off rv = 0;
 
 	for (i = 0; i < e->num_phdrs; i++) {
-		s_end = e->phdrs[i].p.p_offset + e->phdrs[i].p.p_filesz;
+		s_end = e->phdrs[i]->p.p_offset + e->phdrs[i]->p.p_filesz;
 		if (s_end > rv)
 			rv = s_end;
 	}
@@ -1342,8 +1432,8 @@ elfc_vmem_offset(struct elfc *e, GElf_Addr addr, size_t len,
 	GElf_Addr s_end;
 
 	for (i = 0; i < e->num_phdrs; i++) {
-		s_beg = e->phdrs[i].p.p_vaddr;
-		s_end = s_beg + e->phdrs[i].p.p_filesz;
+		s_beg = e->phdrs[i]->p.p_vaddr;
+		s_end = s_beg + e->phdrs[i]->p.p_filesz;
 
 		if ((addr >= s_beg) && ((addr + len) < s_end)) {
 			*off = addr - s_beg;
@@ -1359,22 +1449,31 @@ int
 elfc_pmem_offset(struct elfc *e, GElf_Addr addr, size_t len,
 		 int *pnum, GElf_Off *off)
 {
-	int i;
-	GElf_Addr s_beg;
-	GElf_Addr s_end;
+	struct elfc_phdr p, *v;
+	int rv;
+	GElf_Addr s_beg, s_end;
 
-	for (i = 0; i < e->num_phdrs; i++) {
-		s_beg = e->phdrs[i].p.p_paddr;
-		s_end = s_beg + e->phdrs[i].p.p_filesz;
-
-		if ((addr >= s_beg) && ((addr + len) <= s_end)) {
-			*off = addr - s_beg;
-			*pnum = i;
-			return 0;
-		}
+	/* Find an overlap with the data. */
+	p.p.p_paddr = addr;
+	p.p.p_filesz = len;
+	rv = phdr_phys_search(&e->phdr_tree, &p, &v, BTREE_NO_CLOSEST);
+	if (rv) {
+		e->eerrno = ENOENT;
+		return -1;
 	}
-	e->eerrno = ENOENT;
-	return -1;
+
+	/* Make sure the phdr contains the entire range. */
+	s_beg = v->p.p_paddr;
+	s_end = s_beg + v->p.p_filesz;
+	if (addr < s_beg || (addr + len) > s_end) {
+		e->eerrno = ENOENT;
+		return -1;
+	}
+
+	*pnum = v->idx;
+	*off = addr - s_beg;
+
+	return 0;
 }
 
 int
@@ -1407,7 +1506,7 @@ elfc_max_paddr(struct elfc *e)
 	GElf_Addr s_end;
 
 	for (i = 0; i < e->num_phdrs; i++) {
-		s_end = e->phdrs[i].p.p_paddr + e->phdrs[i].p.p_filesz;
+		s_end = e->phdrs[i]->p.p_paddr + e->phdrs[i]->p.p_filesz;
 		if (max < s_end)
 			max = s_end;
 	}
@@ -1422,7 +1521,7 @@ elfc_max_vaddr(struct elfc *e)
 	GElf_Addr s_end;
 
 	for (i = 0; i < e->num_phdrs; i++) {
-		s_end = e->phdrs[i].p.p_vaddr + e->phdrs[i].p.p_filesz;
+		s_end = e->phdrs[i]->p.p_vaddr + e->phdrs[i]->p.p_filesz;
 		if (max < s_end)
 			max = s_end;
 	}
@@ -1440,7 +1539,7 @@ elfc_vmem_file_offset(struct elfc *e, GElf_Addr addr, size_t len,
 	rv = elfc_vmem_offset(e, addr, len, &pnum, &poff);
 	if (rv == -1)
 		return -1;
-	*off = poff + e->phdrs[pnum].p.p_offset;
+	*off = poff + e->phdrs[pnum]->p.p_offset;
 	return 0;
 }
 
@@ -1455,7 +1554,7 @@ elfc_pmem_file_offset(struct elfc *e, GElf_Addr addr, size_t len,
 	rv = elfc_pmem_offset(e, addr, len, &pnum, &poff);
 	if (rv == -1)
 		return -1;
-	*off = poff + e->phdrs[pnum].p.p_offset;
+	*off = poff + e->phdrs[pnum]->p.p_offset;
 	return 0;
 }
 
@@ -1466,11 +1565,11 @@ int elfc_vmem_to_pmem(struct elfc *e, GElf_Addr vaddr, GElf_Addr *paddr)
 	GElf_Addr s_end;
 
 	for (i = 0; i < e->num_phdrs; i++) {
-		s_beg = e->phdrs[i].p.p_vaddr;
-		s_end = s_beg + e->phdrs[i].p.p_filesz;
+		s_beg = e->phdrs[i]->p.p_vaddr;
+		s_end = s_beg + e->phdrs[i]->p.p_filesz;
 
 		if ((vaddr >= s_beg) && (vaddr < s_end)) {
-			*paddr = e->phdrs[i].p.p_paddr + (vaddr - s_beg);
+			*paddr = e->phdrs[i]->p.p_paddr + (vaddr - s_beg);
 			return 0;
 		}
 	}
@@ -1755,11 +1854,11 @@ elfc_read_notes(struct elfc *e)
 		char *nbuf;
 		size_t size;
 
-		if (e->phdrs[i].p.p_type != PT_NOTE)
+		if (e->phdrs[i]->p.p_type != PT_NOTE)
 			continue;
 
-		size = e->phdrs[i].p.p_filesz;
-		rv = elfc_alloc_read_data(e, e->phdrs[i].p.p_offset,
+		size = e->phdrs[i]->p.p_filesz;
+		rv = elfc_alloc_read_data(e, e->phdrs[i]->p.p_offset,
 					  &buf, size);
 		if (rv == -1)
 			return -1;
@@ -2004,11 +2103,13 @@ free_phdrs(struct elfc *e)
 	if (!e->phdrs)
 		return;
 	for (i = 0; i < e->num_phdrs; i++) {
-		if (e->phdrs[i].data_free)
-			e->phdrs[i].data_free(e, e->phdrs[i].data,
-					      e->phdrs[i].userdata);
+		if (e->phdrs[i]->data_free)
+			e->phdrs[i]->data_free(e, e->phdrs[i]->data,
+					       e->phdrs[i]->userdata);
+		free(e->phdrs[i]);
 	}
 	free(e->phdrs);
+	phdr_phys_free(&e->phdr_tree);
 	e->phdrs = NULL;
 	e->num_phdrs = 0;
 	e->alloced_phdrs = 0;
@@ -2029,7 +2130,7 @@ write_elf32_phdrs(struct elfc *e)
 	}
 	for (i = 0; i < e->num_phdrs; i++) {
 #define PhdrE(type, name) p32[i].p_ ## name = \
-	elfc_put ## type(e, e->phdrs[i].p.p_ ## name)
+	elfc_put ## type(e, e->phdrs[i]->p.p_ ## name)
 		Phdr32_Entries;
 #undef PhdrE
 	}
@@ -2061,7 +2162,7 @@ write_elf64_phdrs(struct elfc *e)
 	}
 	for (i = 0; i < e->num_phdrs; i++) {
 #define PhdrE(type, name) p64[i].p_ ## name = \
-	elfc_put ## type(e, e->phdrs[i].p.p_ ## name)
+	elfc_put ## type(e, e->phdrs[i]->p.p_ ## name)
 		Phdr64_Entries;
 #undef PhdrE
 	}
@@ -2090,8 +2191,8 @@ elfc_write_phdrs(struct elfc *e)
 static int
 read_elf32_phdrs(struct elfc *e, char *buf, GElf_Word phnum)
 {
-	int i;
-	struct elfc_phdr *phdrs;
+	int i, rv;
+	struct elfc_phdr **phdrs;
 
 	phdrs = malloc(sizeof(*phdrs) * phnum);
 	if (!phdrs) {
@@ -2099,20 +2200,38 @@ read_elf32_phdrs(struct elfc *e, char *buf, GElf_Word phnum)
 		return -1;
 	}
 
-	if (e->phdrs) {
-		free(e->phdrs);
-	}
-	e->num_phdrs = phnum;
+	free_phdrs(e);
+	e->num_phdrs = 0;
 	e->alloced_phdrs = phnum;
 	e->phdrs = phdrs;
 
 	for (i = 0; i < e->num_phdrs; i++) {
+		struct elfc_phdr *p = malloc(sizeof(*p));
 		Elf32_Phdr *p32 = ((Elf32_Phdr *)
 				   (buf + (i * e->hdr.e_phentsize)));;
-#define PhdrE(type, name) e->phdrs[i].p.p_ ## name = \
-	elfc_get ## type(e, p32->p_ ## name)
+
+		if (!p) {
+			e->eerrno = ENOMEM;
+			free_phdrs(e);
+			return -1;
+		}
+
+#define PhdrE(type, name) p->p.p_ ## name =			\
+				elfc_get ## type(e, p32->p_ ## name)
 		Phdr32_Entries;
 #undef PhdrE
+
+		if (p->p.p_type == PT_LOAD) {
+			rv = phdr_phys_add(&e->phdr_tree, p);
+			if (rv) {
+				free(p);
+				free_phdrs(e);
+				e->eerrno = ENOMEM;
+				return -1;
+			}
+		}
+		e->phdrs[i] = p;
+		e->num_phdrs++;
 	}
 
 	return 0;
@@ -2121,8 +2240,8 @@ read_elf32_phdrs(struct elfc *e, char *buf, GElf_Word phnum)
 static int
 read_elf64_phdrs(struct elfc *e, char *buf, GElf_Word phnum)
 {
-	int i;
-	struct elfc_phdr *phdrs;
+	int i, rv;
+	struct elfc_phdr **phdrs;
 
 	phdrs = malloc(sizeof(*phdrs) * phnum);
 	if (!phdrs) {
@@ -2130,21 +2249,38 @@ read_elf64_phdrs(struct elfc *e, char *buf, GElf_Word phnum)
 		return -1;
 	}
 
-	if (e->phdrs) {
-		free(e->phdrs);
-	}
-	e->num_phdrs = phnum;
+	free_phdrs(e);
+	e->num_phdrs = 0;
 	e->alloced_phdrs = phnum;
 	e->phdrs = phdrs;
 
 	for (i = 0; i < e->num_phdrs; i++) {
+		struct elfc_phdr *p = malloc(sizeof(*p));
 		Elf64_Phdr *p64 = ((Elf64_Phdr *)
 				   (buf + (i * e->hdr.e_phentsize)));
 
-#define PhdrE(type, name) e->phdrs[i].p.p_ ## name = \
-	elfc_get ## type(e, p64->p_ ## name)
+		if (!p) {
+			e->eerrno = ENOMEM;
+			free_phdrs(e);
+			return -1;
+		}
+
+#define PhdrE(type, name) p->p.p_ ## name = \
+				elfc_get ## type(e, p64->p_ ## name)
 		Phdr64_Entries;
 #undef PhdrE
+
+		if (p->p.p_type == PT_LOAD) {
+			rv = phdr_phys_add(&e->phdr_tree, p);
+			if (rv) {
+				free(p);
+				free_phdrs(e);
+				e->eerrno = ENOMEM;
+				return -1;
+			}
+		}
+		e->phdrs[i] = p;
+		e->num_phdrs++;
 	}
 
 	return 0;
@@ -2192,17 +2328,17 @@ elfc_read_phdrs(struct elfc *e)
 		int i;
 
 		for (i = 0; i < e->num_phdrs; i++) {
-			e->phdrs[i].userdata = elfc_phdr_tmpfile_alloc(e);
-			if (!e->phdrs[i].userdata) {
+			e->phdrs[i]->userdata = elfc_phdr_tmpfile_alloc(e);
+			if (!e->phdrs[i]->userdata) {
 				e->eerrno = ENOMEM;
 				return -1;
 			}
-			e->phdrs[i].pre_write = elfc_phdr_tmpfile_pre_write;
-			e->phdrs[i].do_write = elfc_phdr_tmpfile_do_write;
-			e->phdrs[i].post_write = elfc_phdr_tmpfile_post_write;
-			e->phdrs[i].data_free = elfc_phdr_tmpfile_free;
-			e->phdrs[i].get_data = elfc_phdr_tmpfile_get_data;
-			e->phdrs[i].set_data = elfc_phdr_tmpfile_set_data;
+			e->phdrs[i]->pre_write = elfc_phdr_tmpfile_pre_write;
+			e->phdrs[i]->do_write = elfc_phdr_tmpfile_do_write;
+			e->phdrs[i]->post_write = elfc_phdr_tmpfile_post_write;
+			e->phdrs[i]->data_free = elfc_phdr_tmpfile_free;
+			e->phdrs[i]->get_data = elfc_phdr_tmpfile_get_data;
+			e->phdrs[i]->set_data = elfc_phdr_tmpfile_set_data;
 		}
 	}
 	return rv;
@@ -2748,6 +2884,7 @@ elfc_alloc(void)
 		return NULL;
 	memset(e, 0, sizeof(*e));
 	e->fd = -1;
+	phdr_phys_init(&e->phdr_tree);
 	return e;
 }
 
@@ -2991,10 +3128,10 @@ elfc_data_offset_start(struct elfc *e)
 static void
 call_phdr_post_write(struct elfc *e, int i)
 {
-	if (e->phdrs[i].post_write)
-		e->phdrs[i].post_write(e, &e->phdrs[i].p,
-				       e->phdrs[i].data,
-				       e->phdrs[i].userdata);
+	if (e->phdrs[i]->post_write)
+		e->phdrs[i]->post_write(e, &e->phdrs[i]->p,
+					e->phdrs[i]->data,
+					e->phdrs[i]->userdata);
 }
 
 static void
@@ -3112,10 +3249,10 @@ elfc_write(struct elfc *e)
 	}
 
 	for (i = 0; i < e->num_phdrs; i++) {
-		if (e->phdrs[i].pre_write) {
-			rv = e->phdrs[i].pre_write(e, &e->phdrs[i].p,
-						   e->phdrs[i].data,
-						   e->phdrs[i].userdata);
+		if (e->phdrs[i]->pre_write) {
+			rv = e->phdrs[i]->pre_write(e, &e->phdrs[i]->p,
+						    e->phdrs[i]->data,
+						    e->phdrs[i]->userdata);
 			if (rv == -1) {
 				e->eerrno = errno;
 				i--;
@@ -3155,8 +3292,8 @@ elfc_write(struct elfc *e)
 	}
 
 	for (i = 0; i < e->num_phdrs; i++) {
-		e->phdrs[i].p.p_offset = off;
-		off += e->phdrs[i].p.p_filesz;
+		e->phdrs[i]->p.p_offset = off;
+		off += e->phdrs[i]->p.p_filesz;
 	}
 
 	rv = elfc_write_shdrs(e);
@@ -3168,14 +3305,14 @@ elfc_write(struct elfc *e)
 		goto out;
 
 	for (i = 0; i < e->num_phdrs; i++) {
-		if (e->phdrs[i].do_write) {
+		if (e->phdrs[i]->do_write) {
 			/*
 			 * Should already be in the correct position
 			 * here, no need to seek.
 			 */
-			rv = e->phdrs[i].do_write(e, e->fd, &e->phdrs[i].p,
-						  e->phdrs[i].data,
-						  e->phdrs[i].userdata);
+			rv = e->phdrs[i]->do_write(e, e->fd, &e->phdrs[i]->p,
+						   e->phdrs[i]->data,
+						   e->phdrs[i]->userdata);
 			if (rv == -1) {
 				e->eerrno = errno;
 				goto out;
