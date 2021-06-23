@@ -466,6 +466,36 @@ ile64toh(uint64_t v)
 	return le64toh(v);
 }
 
+static int
+add_phdr(struct diskdump_info *di, uint64_t base, uint64_t pfn)
+{
+	uint64_t size = (pfn - base) * di->blocksize;
+	int rv;
+
+	rv = elfc_add_phdr(di->elf, PT_LOAD, 0,
+			   base * di->blocksize,
+			   size, size,
+			   PF_R | PF_W | PF_X, di->blocksize);
+	if (rv == -1) {
+		fprintf(stderr,
+			"Could not add makedumpfile elf phdr: %s\n",
+			strerror(elfc_get_errno(di->elf)));
+		return -1;
+	}
+	rv = elfc_set_phdr_data(di->elf, rv, NULL, mdfmem_free,
+				NULL, mdfmem_do_write, NULL,
+				mdfmem_get_data,
+				mdfmem_set_data,
+				di);
+	if (rv == -1) {
+		fprintf(stderr,
+			"Error setting qmem phdr data: %s\n",
+			strerror(elfc_get_errno(di->elf)));
+		return -1;
+	}
+	return 0;
+}
+
 #define align(v, a) (((v) + (a) - 1) & ~((typeof(v)) (a - 1)))
 
 struct elfc *
@@ -492,8 +522,8 @@ read_diskdumpmem(struct absio *io, char *extra_vminfo)
 	uint64_t start_kernel;
 	int endc;
 	off_t pos = 0;
-	bool elfc_phdr_set = false;
-	uint64_t psect, pfn, num_pghdrstart;
+	bool elfc_phdr_set = false, in_pmem;
+	uint64_t psect, pfn, base, num_pghdrstart;
 
 	di = malloc(sizeof(*di));
 	if (!di) {
@@ -796,23 +826,26 @@ read_diskdumpmem(struct absio *io, char *extra_vminfo)
 		}
 	}
 
-	rv = elfc_add_phdr(di->elf, PT_LOAD, 0, 0,
-			   di->max_mapnr * di->blocksize,
-			   di->max_mapnr * di->blocksize,
-			   PF_R | PF_W | PF_X, di->blocksize);
-	if (rv == -1) {
-		fprintf(stderr, "Could not add makedumpfile elf phdr: %s\n",
-			strerror(elfc_get_errno(di->elf)));
-		goto out_err;
+	/*
+	 * Add one phdrs for all memory present in the dump.
+	 */
+	for (base = 0, pfn = 0, in_pmem = false; pfn < di->max_mapnr; pfn++) {
+		if (page_dumpable(di, pfn)) {
+			if (in_pmem)
+				continue;
+			base = pfn;
+			in_pmem = true;
+		} else if (in_pmem) {
+			rv = add_phdr(di, base, pfn);
+			if (rv)
+				goto out_err;
+			in_pmem = false;
+		}
 	}
-	rv = elfc_set_phdr_data(di->elf, rv, NULL, mdfmem_free,
-				NULL, mdfmem_do_write, NULL,
-				mdfmem_get_data, mdfmem_set_data,
-				di);
-	if (rv == -1) {
-		fprintf(stderr, "Error setting qmem phdr data: %s\n",
-			strerror(elfc_get_errno(di->elf)));
-		goto out_err;
+	if (in_pmem) {
+		rv = add_phdr(di, base, pfn);
+		if (rv)
+			goto out_err;
 	}
 	elfc_phdr_set = true;
 
