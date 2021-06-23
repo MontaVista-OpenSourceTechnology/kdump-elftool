@@ -55,7 +55,7 @@ rawio_read(struct absio *io, off_t addr, size_t size, void *buf)
 
 	rio = container_of(io, struct rawio, io);
 
-	rv = fseek(rio->f, addr, SEEK_SET);
+	rv = fseeko(rio->f, addr, SEEK_SET);
 	if (rv == -1) {
 		fprintf(stderr, "Error seeking raw file to %llx\n",
 			(unsigned long long) addr);

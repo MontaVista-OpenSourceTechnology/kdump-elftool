@@ -270,7 +270,7 @@ qemu_skip(FILE *f, unsigned int size, const char *name)
 {
 	int rv;
 
-	rv = fseek(f, size, SEEK_CUR);
+	rv = fseeko(f, size, SEEK_CUR);
 	if (rv == -1) {
 		fprintf(stderr, "Unable to skip %s (%u bytes): %s\n",
 			name, size, strerror(errno));
@@ -617,7 +617,7 @@ qemu_ram_load(struct qemu_info *qi, uint8_t section,
 				qm.addr = addr;
 				qm.foffset = ftello(qi->f);
 			}
-			rv = fseek(qi->f, 4096, SEEK_CUR);
+			rv = fseeko(qi->f, 4096, SEEK_CUR);
 			if (rv == -1) {
 				fprintf(stderr, "qmem ram seek error: %s\n",
 					strerror(errno));
@@ -1386,7 +1386,7 @@ out:
 
 	/* Back up to the section type. */
 	off = ftello(qi->f) - len + pos - (rlen + 4);
-	rv = fseek(qi->f, off, SEEK_SET);
+	rv = fseeko(qi->f, off, SEEK_SET);
 	if (rv) {
 		fprintf(stderr, "device search seek error: %s\n",
 			strerror(errno));
@@ -1397,7 +1397,7 @@ out:
 		return rv;
 	if (sec == QEMU_VM_SECTION_START || sec == QEMU_VM_SECTION_FULL) {
 		/* Go back to the byte we just read. */
-		rv = fseek(qi->f, off, SEEK_SET);
+		rv = fseeko(qi->f, off, SEEK_SET);
 		if (rv) {
 			fprintf(stderr, "device search seek error: %s\n",
 				strerror(errno));
@@ -1406,7 +1406,7 @@ out:
 		return 0;
 	}
 	/* Skip to after the first byte of the found name and keep going. */
-	rv = fseek(qi->f, off + 6, SEEK_SET);
+	rv = fseeko(qi->f, off + 6, SEEK_SET);
 	if (rv) {
 		fprintf(stderr, "device search seek error: %s\n",
 			strerror(errno));
