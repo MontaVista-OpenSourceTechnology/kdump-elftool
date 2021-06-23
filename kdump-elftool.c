@@ -526,6 +526,32 @@ copy_elf_notes(struct elfc *out, struct elfc *in,
 	return 0;
 }
 
+static void
+init_page_maps(struct kdt_data *d)
+{
+	list_init(&d->page_maps);
+}
+
+static void
+add_page_map(struct kdt_data *d, struct page_range *range)
+{
+	list_add_last(&d->page_maps, &range->link);
+}
+
+static void
+free_page_maps(struct kdt_data *d)
+{
+	struct page_range *range;
+	struct link *tmp;
+
+	list_for_each_item_safe(&d->page_maps, range, tmp,
+				struct page_range, link) {
+		list_unlink(&range->link);
+		free(range->bitmap);
+		free(range);
+	}
+}
+
 static struct page_range *
 find_pfn_range(struct kdt_data *d, uint64_t pfn)
 {
@@ -939,22 +965,8 @@ add_page_range(struct kdt_data *d,
 		return -1;
 	}
 	memset(range->bitmap, 0, divide_round_up(count, 8));
-	list_add_last(&d->page_maps, &range->link);
+	add_page_map(d, range);
 	return 0;
-}
-
-static void
-free_page_maps(struct kdt_data *d)
-{
-	struct page_range *range;
-	struct link *tmp;
-
-	list_for_each_item_safe(&d->page_maps, range, tmp,
-				struct page_range, link) {
-		list_unlink(&range->link);
-		free(range->bitmap);
-		free(range);
-	}
 }
 
 static int64_t
@@ -1160,7 +1172,7 @@ process_mem_section(struct kdt_data *d, uint64_t sectionnr,
 		return -1;
 	}
 	memset(range->bitmap, 0, divide_round_up(d->pages_per_section, 8));
-	list_add_last(&d->page_maps, &range->link);
+	add_page_map(d, range);
 	return 0;
 }
 
@@ -1912,7 +1924,7 @@ topelf(int argc, char *argv[])
 	char *extra_vminfofile = NULL;
 
 	memset(d, 0, sizeof(*d));
-	list_init(&d->page_maps);
+	init_page_maps(d);
 
 	for (;;) {
 		int curr_optind = optind;
@@ -2673,7 +2685,7 @@ tovelf(int argc, char *argv[])
 	bool proc_threads = false;
 
 	memset(d, 0, sizeof(*d));
-	list_init(&d->page_maps);
+	init_page_maps(d);
 
 	for (;;) {
 		int curr_optind = optind;
