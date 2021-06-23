@@ -90,7 +90,7 @@ struct elfc_phdr {
 #define BTREE_EXPORT_NAME(s) phdr_phys_ ## s
 #define btree_t phdr_phys_btree
 #define btree_cmp_key phdr_phys_cmp
-#define BTREE_NEEDS 0
+#define BTREE_NEEDS BTREE_NEEDS_NEXT
 
 int
 phdr_phys_cmp(struct elfc_phdr *val1, struct elfc_phdr *val2)
@@ -1457,15 +1457,24 @@ elfc_pmem_offset(struct elfc *e, GElf_Addr addr, size_t len,
 	p.p.p_paddr = addr;
 	p.p.p_filesz = len;
 	rv = phdr_phys_search(&e->phdr_tree, &p, &v, BTREE_NO_CLOSEST);
-	if (rv) {
-		e->eerrno = ENOENT;
-		return -1;
-	}
+	while (!rv) {
+	    s_beg = v->p.p_paddr;
+	    s_end= s_beg + v->p.p_filesz;
 
-	/* Make sure the phdr contains the entire range. */
-	s_beg = v->p.p_paddr;
-	s_end = s_beg + v->p.p_filesz;
-	if (addr < s_beg || (addr + len) > s_end) {
+	    /* Make sure the phdr contains the entire range. */
+	    if (addr < s_beg || (addr + len) > s_end) {
+		/*
+		 * Duplicates are allowed, so go through the tree until
+		 * we find one that doesn't overlap.
+		 */
+		rv = phdr_phys_next(&e->phdr_tree, v, &v);
+		if (rv || phdr_phys_cmp(&p, v) != 0)
+		    break;
+	    } else {
+		break;
+	    }
+	}
+	if (rv) {
 		e->eerrno = ENOENT;
 		return -1;
 	}
@@ -2885,6 +2894,7 @@ elfc_alloc(void)
 	memset(e, 0, sizeof(*e));
 	e->fd = -1;
 	phdr_phys_init(&e->phdr_tree);
+	e->phdr_tree.Allow_Duplicates = 1;
 	return e;
 }
 
