@@ -527,31 +527,26 @@ copy_elf_notes(struct elfc *out, struct elfc *in,
 }
 
 #define BTREE_NODE_SIZE 10
-typedef struct page_range_val { struct page_range *a; } btree_val_t;
+#define btree_val_t struct page_range *
 #define BTREE_NAMES_LOCAL static
 
 int
-btree_cmp_key_page(btree_val_t val1, btree_val_t val2)
+btree_cmp_key_page(struct page_range *val1, struct page_range *val2)
 {
-	uint64_t start_page1 = val1.a->start_page;
-	uint64_t start_page2 = val2.a->start_page;
-	uint64_t end_page1 = start_page1 + val1.a->nr_pages - 1;
-	uint64_t end_page2 = start_page2 + val2.a->nr_pages - 1;
-
-	if (start_page1 > end_page2)
+	if (val1->start_page > val2->start_page + val2->nr_pages - 1)
 		return 1;
-	if (start_page2 > end_page1)
+	if (val2->start_page > val1->start_page + val1->nr_pages - 1)
 		return -1;
 	return 0;
 }
 
 int
-btree_cmp_key_addr(btree_val_t val1, btree_val_t val2)
+btree_cmp_key_addr(struct page_range *val1, struct page_range *val2)
 {
-	uint64_t start_addr1 = val1.a->mapaddr;
-	uint64_t start_addr2 = val2.a->mapaddr;
-	uint64_t end_addr1 = start_addr1 + val1.a->data_len - 1;
-	uint64_t end_addr2 = start_addr2 + val2.a->data_len - 1;
+	uint64_t start_addr1 = val1->mapaddr;
+	uint64_t start_addr2 = val2->mapaddr;
+	uint64_t end_addr1 = start_addr1 + val1->data_len - 1;
+	uint64_t end_addr2 = start_addr2 + val2->data_len - 1;
 
 	if (start_addr1 > end_addr2)
 		return 1;
@@ -571,13 +566,21 @@ btree_cmp_key_addr(btree_val_t val1, btree_val_t val2)
 #undef btree_t
 #undef btree_cmp_key
 #undef BTREE_NEEDS
+
 #define BTREE_EXPORT_NAME(s) page_range_addr_ ## s
 #define btree_t page_range_addr_btree
 #define btree_cmp_key btree_cmp_key_addr
 #define BTREE_NEEDS (BTREE_NEEDS_FIRST | BTREE_NEEDS_DELETE)
 
-
 #include "btree.h"
+
+#undef BTREE_EXPORT_NAME
+#undef btree_t
+#undef btree_cmp_key
+#undef BTREE_NEEDS
+#undef BTREE_NODE_SIZE
+#undef btree_val_t
+#undef BTREE_NAMES_LOCAL
 
 static int
 init_page_maps(struct kdt_data *d)
@@ -615,16 +618,15 @@ btree_err_to_errno(int rv)
 static int
 add_page_map(struct kdt_data *d, struct page_range *range)
 {
-	struct page_range_val v = { range };
 	int rv;
 
 	range->data_len = d->page_size + range->nr_pages;
 
-	rv = page_range_page_add(d->page_tree, v);
+	rv = page_range_page_add(d->page_tree, range);
 	if (rv)
 		goto out_err;
 
-	rv = page_range_addr_add(d->addr_tree, v);
+	rv = page_range_addr_add(d->addr_tree, range);
 	if (rv)
 		goto out_err;
 	return 0;
@@ -637,8 +639,7 @@ out_err:
 static void
 free_page_maps(struct kdt_data *d)
 {
-	struct page_range_val v = { NULL }, v2;
-	struct page_range *p;
+	struct page_range *p = NULL, *p2;
 	int rv, is_end = 0;
 
 	if (d->page_tree)
@@ -646,13 +647,13 @@ free_page_maps(struct kdt_data *d)
 	if (!d->addr_tree)
 		return;
 
-	rv = page_range_addr_first(d->addr_tree, &v);
+	rv = page_range_addr_first(d->addr_tree, &p);
 	if (rv == BTREE_AT_END_OF_TREE)
 		is_end = 1;
 	while (!is_end) {
-		p = v.a;
-		rv = page_range_addr_delete(d->addr_tree, v, &v2, &is_end);
-		free(p);
+		p2 = p;
+		rv = page_range_addr_delete(d->addr_tree, p2, &p, &is_end);
+		free(p2);
 	}
 	page_range_addr_free(d->addr_tree);
 }
@@ -660,27 +661,25 @@ free_page_maps(struct kdt_data *d)
 static struct page_range *
 find_pfn_range(struct kdt_data *d, uint64_t pfn)
 {
-	struct page_range p;
-	struct page_range_val v = { &p }, v2;
+	struct page_range p, *val;
 
 	p.start_page = pfn;
 	p.nr_pages = 1;
-	if (page_range_page_search(d->page_tree, v, &v2, BTREE_NO_CLOSEST))
+	if (page_range_page_search(d->page_tree, &p, &val, BTREE_NO_CLOSEST))
 		return NULL;
-	return v2.a;
+	return val;
 }
 
 static struct page_range *
 find_page_addr_range(struct kdt_data *d, GElf_Addr addr)
 {
-	struct page_range p;
-	struct page_range_val v = { &p }, v2;
+	struct page_range p, *val;
 
 	p.mapaddr = addr;
 	p.nr_pages = 1;
-	if (page_range_addr_search(d->addr_tree, v, &v2, BTREE_NO_CLOSEST))
+	if (page_range_addr_search(d->addr_tree, &p, &val, BTREE_NO_CLOSEST))
 		return NULL;
-	return v2.a;
+	return val;
 }
 
 /*
