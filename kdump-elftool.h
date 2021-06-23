@@ -177,12 +177,15 @@ int fetch_vaddrlong(struct kdt_data *d, GElf_Addr addr,
 		    uint64_t *out, char *name);
 
 struct page_range {
-	struct link link;
 	uint64_t start_page;
 	uint64_t nr_pages;
 	GElf_Addr mapaddr;
+	uint64_t data_len;
 	unsigned char *bitmap;
 };
+
+struct page_range_page_btree_s;
+struct page_range_addr_btree_s;
 
 enum dump_levels {
 	DUMP_ALL,
@@ -317,7 +320,11 @@ struct kdt_data {
 #define SECTION_MAP_LAST_BIT	(1ULL<<3)
 #define SECTION_MAP_MASK	(~(SECTION_MAP_LAST_BIT-1))
 
-	struct list page_maps;
+	/* Page ranges, sorted by PFN. */
+	struct page_range_page_btree_s *page_tree;
+
+	/* Page ranges, sorted by map address. */
+	struct page_range_addr_btree_s *addr_tree;
 
 	uint64_t skipped_not_present;
 	uint64_t skipped_free;
