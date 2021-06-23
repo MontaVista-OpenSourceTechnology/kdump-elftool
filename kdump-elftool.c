@@ -1849,7 +1849,8 @@ enum intype {
 	INTYPE_OLDMEM,
 	INTYPE_PELF,
 	INTYPE_QEMU,
-	INTYPE_MAKEDUMPFILE
+	INTYPE_MAKEDUMPFILE,
+	INTYPE_KDUMP
 };
 
 static int
@@ -1933,6 +1934,8 @@ topelf(int argc, char *argv[])
 				intype = INTYPE_QEMU;
 			} else if (strcmp(optarg, "makedumpfile") == 0) {
 				intype = INTYPE_MAKEDUMPFILE;
+			} else if (strcmp(optarg, "kdump") == 0) {
+				intype = INTYPE_KDUMP;
 			} else {
 				subcmd_usage("Unknown input type: %s\n",
 					     optarg);
@@ -2010,6 +2013,14 @@ topelf(int argc, char *argv[])
 		d->elf = read_diskdumpmem(io2, d->extra_vminfo);
 		if (!d->elf)
 			io2->free(io2);
+	} else if (intype == INTYPE_KDUMP) {
+		struct absio *io = read_rawfile(infile);
+
+		if (!io)
+			goto out_err;
+		d->elf = read_diskdumpmem(io, d->extra_vminfo);
+		if (!d->elf)
+			io->free(io);
 	} else {
 		assert(1);
 	}
@@ -2695,6 +2706,8 @@ tovelf(int argc, char *argv[])
 				intype = INTYPE_QEMU;
 			} else if (strcmp(optarg, "makedumpfile") == 0) {
 				intype = INTYPE_MAKEDUMPFILE;
+			} else if (strcmp(optarg, "kdump") == 0) {
+				intype = INTYPE_KDUMP;
 			} else {
 				subcmd_usage("Unknown input type: %s\n",
 					     optarg);
@@ -2808,6 +2821,14 @@ tovelf(int argc, char *argv[])
 			io2->free(io2);
 			goto out_err;
 		}
+	} else if (intype == INTYPE_KDUMP) {
+		struct absio *io = read_rawfile(infile);
+
+		if (!io)
+			goto out_err;
+		d->elf = read_diskdumpmem(io, d->extra_vminfo);
+		if (!d->elf)
+			io->free(io);
 	} else {
 		assert(1);
 	}	
