@@ -194,6 +194,7 @@ struct diskdump_info {
 	unsigned char *cmpr_pgbuf;
 	unsigned int page_size;
 	int64_t *page_sect_pfn_start;
+	unsigned int refcount;
 };
 
 static bool
@@ -444,6 +445,11 @@ mdfmem_free(struct elfc *e, void *data, void *userdata)
 {
 	struct diskdump_info *di = userdata;
 
+	assert(di->refcount > 0);
+	di->refcount--;
+	if (di->refcount)
+		return;
+
 	if (di->io)
 		di->io->free(di->io);
 	free(di->bitmap1);
@@ -493,6 +499,7 @@ add_phdr(struct diskdump_info *di, uint64_t base, uint64_t pfn)
 			strerror(elfc_get_errno(di->elf)));
 		return -1;
 	}
+	di->refcount++;
 	return 0;
 }
 
