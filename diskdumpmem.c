@@ -49,6 +49,7 @@
 #include <signal.h>
 #include <assert.h>
 #include <zlib.h>
+#include <lzo/lzo1x.h>
 
 #include "elfc.h"
 #include "kdump-x86.h"
@@ -191,7 +192,7 @@ struct diskdump_info {
 	uint64_t max_mapnr;
 	unsigned char *pgbuf;
 	unsigned char *cmpr_pgbuf;
-
+	unsigned int page_size;
 	int64_t *page_sect_pfn_start;
 };
 
@@ -271,39 +272,64 @@ mdfmem_read_addr(struct diskdump_info *di, uint64_t addr, unsigned char *buf)
 		return -1;
 	}
 
-	if (pd.flags & DUMP_DH_COMPRESSED_LZO) {
-		fprintf(stderr, "LZO compression not supported for pfn %llu\n",
-			(unsigned long long) pfn);
-		return -1;
-	}
-	if (pd.flags & DUMP_DH_COMPRESSED_SNAPPY) {
-		fprintf(stderr, "Snappy compression not supported for "
-			"pfn %llu\n", (unsigned long long) pfn);
-		return -1;
-	}
-
 	if (pd.flags & DUMP_DH_COMPRESSED_ZLIB) {
 		uLongf destlen = di->blocksize;
 
 		rv = absio_read(di->io, pd.offset, pd.size, di->cmpr_pgbuf);
-		if (!rv) {
-			rv = uncompress(buf, &destlen, di->cmpr_pgbuf, pd.size);
-			if (rv != Z_OK) {
-				fprintf(stderr,
-					"Error uncompressing pfn %llu\n",
-					(unsigned long long) pfn);
-				return -1;
-			}
-			if (destlen != di->blocksize) {
-				fprintf(stderr,
-					"Bad size uncompressing pfn %llu, "
-					"got %lu, expected %d\n",
-					(unsigned long long) pfn, destlen,
-					di->blocksize);
-				return -1;
-			}
-			rv = 0;
+		if (rv) {
+			fprintf(stderr,
+				"Error reading zlib compressed page %llu: %s\n",
+				(unsigned long long) pfn, strerror(errno));
+			return -1;
 		}
+
+		rv = uncompress(buf, &destlen, di->cmpr_pgbuf, pd.size);
+		if (rv != Z_OK) {
+			fprintf(stderr,
+				"Error uncompressing pfn %llu\n",
+				(unsigned long long) pfn);
+			return -1;
+		}
+		if (destlen != di->blocksize) {
+			fprintf(stderr,
+				"Bad size uncompressing pfn %llu, "
+				"got %lu, expected %d\n",
+				(unsigned long long) pfn, destlen,
+				di->blocksize);
+			return -1;
+		}
+		rv = 0;
+	} else if (pd.flags & DUMP_DH_COMPRESSED_LZO) {
+		unsigned long retlen = di->page_size;
+
+		rv = absio_read(di->io, pd.offset, pd.size, di->cmpr_pgbuf);
+		if (rv) {
+			fprintf(stderr,
+				"Error reading lzo compressed page %llu: %s\n",
+				(unsigned long long) pfn, strerror(errno));
+			return -1;
+		}
+
+		rv = lzo1x_decompress_safe(di->cmpr_pgbuf, pd.size,
+					   buf, &retlen,
+					   LZO1X_MEM_DECOMPRESS);
+		if (rv != LZO_E_OK) {
+			fprintf(stderr,
+			       "Error uncompressing lzo compressed page %llu\n",
+				(unsigned long long) pfn);
+			return -1;
+		}
+		if (retlen != di->page_size) {
+			fprintf(stderr,
+				"Uncompressed lzo page %llu bad size: %ld\n",
+				(unsigned long long) pfn, retlen);
+			return -1;
+		}
+		rv = 0;
+	} else if (pd.flags & DUMP_DH_COMPRESSED_SNAPPY) {
+		fprintf(stderr, "Snappy compression not supported for "
+			"pfn %llu\n", (unsigned long long) pfn);
+		return -1;
 	} else {
 		rv = absio_read(di->io, pd.offset, pd.size, buf);
 	}
@@ -707,6 +733,14 @@ read_diskdumpmem(struct absio *io, char *extra_vminfo)
 	}
 		
 	handle_vminfo_notes(di->elf, vmci, extra_vminfo);
+
+	if (!vmci[0].found) {
+		fprintf(stderr,
+			"Error: PAGE_SIZE not in vmcore\n");
+		goto out_err;
+	}
+	di->page_size = vmci[0].val;
+
 	if (!vmci[3].found) {
 		fprintf(stderr,
 			"Error: SIZE(list_head) not in vmcore\n");
