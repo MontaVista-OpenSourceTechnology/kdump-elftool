@@ -1,6 +1,6 @@
 bin_PROGRAMS = kdump-elftool
 ACLOCAL_AMFLAGS = -I m4
-AM_CFLAGS=-Wall
+AM_CFLAGS=-Wall -D_FILE_OFFSET_BITS=64
 kdump_elftool_SOURCES = elfc.c kdump-elftool.c list.c oldmem.c \
 	kdump-x86_64.c kdump-i386.c kdump-mips.c kdump-arm.c kdump-ppc32.c \
 	kdump-arm64.c qemumem.c rawfile.c makedumpfile.c diskdumpmem.c
