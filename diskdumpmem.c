@@ -168,6 +168,13 @@ struct page_desc32 {
         uint64_t	page_flags;
 };
 
+/*
+ * If a page is not set in bitmap2, then it is not present in the page
+ * headers.  To make things easier to calculate, we record the
+ * starting location of every 4096th page in page_sect_pfn_start so we
+ * only have a small section of memory to look through
+ */
+#define PAGES_PER_SECT	4096ULL
 
 struct diskdump_info {
 	bool is_64bit;
@@ -178,18 +185,41 @@ struct diskdump_info {
 	uint64_t (*conv64)(uint64_t v);
 	struct disk_dump_header hdr;
 	struct kdump_sub_header64 subhdr;
-	unsigned char *bitmap;
+	unsigned char *bitmap1;
+	unsigned char *bitmap2;
 	off_t page_desc_start;
 	uint64_t max_mapnr;
 	unsigned char *pgbuf;
 	unsigned char *cmpr_pgbuf;
+
+	int64_t *page_sect_pfn_start;
 };
+
+static bool
+page_dumpable(struct diskdump_info *di, uint64_t pfn)
+{
+	return (di->bitmap2[pfn >> 3] & (1 << (pfn & 0x7))) != 0;
+}
+
+uint64_t
+get_pfn_idx(struct diskdump_info *di, uint64_t pfn)
+{
+	uint64_t idx;
+	uint64_t i;
+
+	idx = di->page_sect_pfn_start[pfn / PAGES_PER_SECT];
+	for (i = pfn & ~(PAGES_PER_SECT - 1); i < pfn; i++) {
+		if (page_dumpable(di, i))
+			idx++;
+	}
+	return idx;
+}
 
 static int
 mdfmem_read_addr(struct diskdump_info *di, uint64_t addr, unsigned char *buf)
 {
 	int rv;
-	uint64_t pfn = addr / di->blocksize;
+	uint64_t pfn = addr / di->blocksize, idx;
 	struct page_desc64 pd;
 
 	if (pfn >= di->max_mapnr) {
@@ -198,14 +228,16 @@ mdfmem_read_addr(struct diskdump_info *di, uint64_t addr, unsigned char *buf)
 		return -1;
 	}
 
-	if (!(di->bitmap[pfn >> 3] & (1 << (pfn & 0x7)))) {
+	if (!page_dumpable(di, pfn)) {
 		fprintf(stderr, "pfn %llu not present\n",
 			(unsigned long long) pfn);
 		return -1;
 	}
+
+	idx = get_pfn_idx(di, pfn);
 	if (di->is_64bit) {
 		rv = absio_read(di->io,
-				di->page_desc_start + (pfn * sizeof(pd)),
+				di->page_desc_start + (idx * sizeof(pd)),
 				sizeof(pd), &pd);
 		if (rv) {
 			fprintf(stderr, "can't read page data for pfn %llu\n",
@@ -220,7 +252,7 @@ mdfmem_read_addr(struct diskdump_info *di, uint64_t addr, unsigned char *buf)
 		struct page_desc32 p3;
 
 		rv = absio_read(di->io,
-				di->page_desc_start + (pfn * sizeof(p3)),
+				di->page_desc_start + (idx * sizeof(p3)),
 				sizeof(p3), &p3);
 		if (rv) {
 			fprintf(stderr, "can't read page desc for pfn %llu\n",
@@ -388,7 +420,8 @@ mdfmem_free(struct elfc *e, void *data, void *userdata)
 
 	if (di->io)
 		di->io->free(di->io);
-	free(di->bitmap);
+	free(di->bitmap1);
+	free(di->page_sect_pfn_start);
 	free(di->pgbuf);
 	free(di->cmpr_pgbuf);
 	free(di);
@@ -434,6 +467,7 @@ read_diskdumpmem(struct absio *io, char *extra_vminfo)
 	int endc;
 	off_t pos = 0;
 	bool elfc_phdr_set = false;
+	uint64_t psect, pfn, num_pghdrstart;
 
 	di = malloc(sizeof(*di));
 	if (!di) {
@@ -693,19 +727,40 @@ read_diskdumpmem(struct absio *io, char *extra_vminfo)
 
 	pos = (1 + di->hdr.sub_hdr_size) * di->blocksize;
 
-	di->bitmap = malloc(di->hdr.bitmap_blocks * di->blocksize);
-	if (!di->bitmap) {
+	di->bitmap1 = malloc(di->hdr.bitmap_blocks * di->blocksize);
+	if (!di->bitmap1) {
 		fprintf(stderr, "Could not allocate bitmap memory\n");
 		goto out_err;
 	}
 	rv = absio_read(io, pos, di->hdr.bitmap_blocks * di->blocksize,
-			di->bitmap);
+			di->bitmap1);
 	if (rv) {
 		fprintf(stderr, "Could not read bitmap memory\n");
 		goto out_err;
 	}
+	di->bitmap2 = di->bitmap1 + (di->hdr.bitmap_blocks * di->blocksize / 2);
 	di->page_desc_start = pos + di->hdr.bitmap_blocks * di->blocksize;
 	di->max_mapnr = di->subhdr.max_mapnr_64;
+
+	/* Calculate the page section start locations. */
+	num_pghdrstart = (di->max_mapnr + PAGES_PER_SECT - 1) / PAGES_PER_SECT;
+	di->page_sect_pfn_start = malloc(num_pghdrstart * sizeof(int64_t));
+	if (!di->page_sect_pfn_start) {
+		fprintf(stderr,
+			"Could not allocate page header start memory\n");
+		goto out_err;
+	}
+	di->page_sect_pfn_start[0] = 0;
+	for (psect = 1, pfn = 0; psect < num_pghdrstart; psect++) {
+		unsigned int j;
+
+		di->page_sect_pfn_start[psect] =
+			di->page_sect_pfn_start[psect - 1];
+		for (j = 0; j < PAGES_PER_SECT; j++, pfn++) {
+			if (page_dumpable(di, pfn))
+				di->page_sect_pfn_start[psect]++;
+		}
+	}
 
 	rv = elfc_add_phdr(di->elf, PT_LOAD, 0, 0,
 			   di->max_mapnr * di->blocksize,
@@ -792,8 +847,10 @@ out_err:
 		elfc_free(di->elf);
 	if (!elfc_phdr_set) {
 		/* Once we set the phdr data, elfc_free() will free di. */
-		if (di->bitmap)
-			free(di->bitmap);
+		if (di->page_sect_pfn_start)
+			free(di->page_sect_pfn_start);
+		if (di->bitmap1)
+			free(di->bitmap1);
 		if (di->pgbuf)
 			free(di->pgbuf);
 		if (di->cmpr_pgbuf)
