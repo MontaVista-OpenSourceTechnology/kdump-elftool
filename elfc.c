@@ -214,7 +214,8 @@ elfc_add_phdr(struct elfc *e,
 	GElf_Off offset = 0;
 	int i;
 
-	extend_phdrs(e);
+	if (extend_phdrs(e) == -1)
+		return -1;
 
 	i = e->num_phdrs;
 	memset(&e->phdrs[i], 0, sizeof(e->phdrs[i]));
