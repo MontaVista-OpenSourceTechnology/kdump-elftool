@@ -175,7 +175,7 @@ struct page_desc32 {
  * starting location of every 4096th page in page_sect_pfn_start so we
  * only have a small section of memory to look through
  */
-#define PAGES_PER_SECT	4096ULL
+#define PAGES_PER_SECT	256ULL
 
 struct diskdump_info {
 	bool is_64bit;
