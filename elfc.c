@@ -2214,7 +2214,7 @@ read_elf32_phdrs(struct elfc *e, char *buf, GElf_Word phnum)
 	e->alloced_phdrs = phnum;
 	e->phdrs = phdrs;
 
-	for (i = 0; i < e->num_phdrs; i++) {
+	for (i = 0; i < phnum; i++) {
 		struct elfc_phdr *p = malloc(sizeof(*p));
 		Elf32_Phdr *p32 = ((Elf32_Phdr *)
 				   (buf + (i * e->hdr.e_phentsize)));;
@@ -2263,7 +2263,7 @@ read_elf64_phdrs(struct elfc *e, char *buf, GElf_Word phnum)
 	e->alloced_phdrs = phnum;
 	e->phdrs = phdrs;
 
-	for (i = 0; i < e->num_phdrs; i++) {
+	for (i = 0; i < phnum; i++) {
 		struct elfc_phdr *p = malloc(sizeof(*p));
 		Elf64_Phdr *p64 = ((Elf64_Phdr *)
 				   (buf + (i * e->hdr.e_phentsize)));
