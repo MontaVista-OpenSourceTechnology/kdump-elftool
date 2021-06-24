@@ -319,6 +319,7 @@ elfc_del_phdr(struct elfc *e, int pnum)
 	if (e->phdrs[pnum]->data_free)
 		e->phdrs[pnum]->data_free(e, e->phdrs[pnum]->data,
 					 e->phdrs[pnum]->userdata);
+	free(e->phdrs[pnum]);
 	memmove(e->phdrs + pnum, e->phdrs + pnum + 1,
 		sizeof(*e->phdrs) * (e->num_phdrs - pnum - 1));
 	e->num_phdrs--;
@@ -2183,6 +2184,8 @@ elfc_del_note(struct elfc *e, int index)
 		return -1;
 	}
 
+	free(e->notes[index].name);
+	free(e->notes[index].data);
 	e->num_notes--;
 	for (i = index; i < e->num_notes; i++)
 		e->notes[i] = e->notes[i + 1];
@@ -2195,6 +2198,8 @@ free_phdrs(struct elfc *e)
 {
 	int i;
 
+	phdr_phys_free(&e->phdr_tree);
+
 	if (!e->phdrs)
 		return;
 	for (i = 0; i < e->num_phdrs; i++) {
@@ -2204,7 +2209,6 @@ free_phdrs(struct elfc *e)
 		free(e->phdrs[i]);
 	}
 	free(e->phdrs);
-	phdr_phys_free(&e->phdr_tree);
 	e->phdrs = NULL;
 	e->num_phdrs = 0;
 	e->alloced_phdrs = 0;
@@ -2295,7 +2299,6 @@ read_elf32_phdrs(struct elfc *e, char *buf, GElf_Word phnum)
 		return -1;
 	}
 
-	free_phdrs(e);
 	e->num_phdrs = 0;
 	e->alloced_phdrs = phnum;
 	e->phdrs = phdrs;
@@ -2344,7 +2347,6 @@ read_elf64_phdrs(struct elfc *e, char *buf, GElf_Word phnum)
 		return -1;
 	}
 
-	free_phdrs(e);
 	e->num_phdrs = 0;
 	e->alloced_phdrs = phnum;
 	e->phdrs = phdrs;
@@ -2405,6 +2407,11 @@ elfc_read_phdrs(struct elfc *e)
 	int rv;
 	GElf_Word phnum;
 	void *tmpdata = NULL;
+
+	if (e->phdrs) {
+		e->eerrno = EBUSY;
+		return -1;
+	}
 
 	rv = get_phnum(e, &phnum);
 	if (rv == -1)
@@ -2543,9 +2550,6 @@ read_elf32_shdrs(struct elfc *e, char *buf)
 		return -1;
 	}
 
-	if (e->shdrs)
-		free(e->shdrs);
-
 	e->num_shdrs = e->hdr.e_shnum;
 	e->alloced_shdrs = e->hdr.e_shnum;
 	e->shdrs = shdrs;
@@ -2574,9 +2578,6 @@ read_elf64_shdrs(struct elfc *e, char *buf)
 		return -1;
 	}
 
-	if (e->shdrs) {
-		free(e->shdrs);
-	}
 	e->num_shdrs = e->hdr.e_shnum;
 	e->alloced_shdrs = e->hdr.e_shnum;
 	e->shdrs = shdrs;
@@ -2602,6 +2603,11 @@ elfc_read_shdrs(struct elfc *e)
 	Elf32_Word i;
 	const char *name;
 	void *tmpdata = NULL;
+
+	if (e->shdrs) {
+		e->eerrno = EBUSY;
+		return -1;
+	}
 
 	rv = elfc_alloc_read_data(e, e->hdr.e_shoff, &buf,
 				  e->hdr.e_shentsize * e->hdr.e_shnum);
