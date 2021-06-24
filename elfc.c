@@ -2893,7 +2893,10 @@ elfc_alloc(void)
 		return NULL;
 	memset(e, 0, sizeof(*e));
 	e->fd = -1;
-	phdr_phys_init(&e->phdr_tree);
+	if (phdr_phys_init(&e->phdr_tree)) {
+	    free(e);
+	    return NULL;
+	}
 	e->phdr_tree.Allow_Duplicates = 1;
 	return e;
 }

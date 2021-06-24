@@ -591,8 +591,10 @@ init_page_maps(struct kdt_data *d)
 	d->addr_tree = malloc(sizeof(*d->addr_tree));
 	if (!d->addr_tree)
 		goto out_err;
-	page_range_page_init(d->page_tree);
-	page_range_addr_init(d->addr_tree);
+	if (page_range_page_init(d->page_tree))
+		goto out_err;
+	if (page_range_addr_init(d->addr_tree))
+		goto out_err;
 	return 0;
 
 out_err:

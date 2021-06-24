@@ -1740,14 +1740,19 @@ BTREE_EXPORT_NAME(prev) (btree_t     *tree,
 }
 #endif
 
-BTREE_NAMES_LOCAL void
+BTREE_NAMES_LOCAL int
 BTREE_EXPORT_NAME(init) (btree_t *tree)
 {
+    if (tree->Root)
+	return BTREE_ITEM_ALREADY_EXISTS;
     tree->Root = BTREE_EXPORT_NAME(Alloc_Leaf)(tree);
+    if (!tree->Root)
+	return BTREE_OUT_OF_MEMORY;
     tree->Root->Parent = NULL;
     tree->Count = 0;
     tree->Allow_Duplicates = 0;
     tree->Update = 0;
+    return 0;
 }
 
 static void

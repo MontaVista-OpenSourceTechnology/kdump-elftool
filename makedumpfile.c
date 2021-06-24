@@ -172,7 +172,11 @@ read_makedumpfile(struct absio *subio)
 		return NULL;
 	}
 	memset(mi, 0, sizeof(*mi));
-	mdf_btree_init(&mi->mdfmem);
+	if (mdf_btree_init(&mi->mdfmem)) {
+		free(mi);
+		fprintf(stderr, "Unable to init makedumpfile btree\n");
+		return NULL;
+	}
 
 	mi->sio = subio;
 

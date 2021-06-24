@@ -1651,7 +1651,11 @@ read_qemumem(char *vmdump, char *extra_vminfo, int machineclass)
 	}
 	memset(qi, 0, sizeof(*qi));
 	list_init(&qi->devices);
-	qmem_btree_init(&qi->qmem);
+	if (qmem_btree_init(&qi->qmem)) {
+		free(qi);
+		fprintf(stderr, "Unable to allocate qemu btree\n");
+		return NULL;
+	}
 	memset(&dummy_d, 0, sizeof(dummy_d));
 
 	qi->f = fopen(vmdump, "r");
