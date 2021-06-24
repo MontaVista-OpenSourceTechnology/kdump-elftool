@@ -3905,5 +3905,8 @@ main(int argc, char *argv[])
 	optind++;
 
 	subcmd = subcommands[i].name;
-	return subcommands[i].handler(argc, argv);
+	i = subcommands[i].handler(argc, argv);
+	if (osrelease)
+		free(osrelease);
+	return i;
 }
