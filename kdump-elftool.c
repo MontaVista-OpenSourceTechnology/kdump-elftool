@@ -2325,16 +2325,20 @@ add_auxv(struct elfc *e, const char *vmlinux, GElf_Addr dyn_stext)
 
 	elfclass = elfc_getclass(e);
 	if (elfclass == ELFCLASS32) {
-		Elf32_auxv_t auxv;
+		Elf32_auxv_t auxv[2];
 
-		auxv.a_type = elfc_putAddr(e, AT_ENTRY);
-		auxv.a_un.a_val = elfc_putAddr(e, dyn_entry);
-		rv = elfc_add_note(e, NT_AUXV, "CORE", 5, &auxv, sizeof(auxv));
+		auxv[0].a_type = elfc_putAddr(e, AT_ENTRY);
+		auxv[0].a_un.a_val = elfc_putAddr(e, dyn_entry);
+		auxv[1].a_type = elfc_putAddr(e, AT_BASE);
+		auxv[1].a_un.a_val = elfc_putAddr(e, dyn_entry);
+		rv = elfc_add_note(e, NT_AUXV, "CORE", 5, auxv, sizeof(auxv));
 	} else if (elfclass == ELFCLASS64) {
-		Elf64_auxv_t auxv;
+		Elf64_auxv_t auxv[2];
 
-		auxv.a_type = elfc_putAddr(e, AT_ENTRY);
-		auxv.a_un.a_val = elfc_putAddr(e, dyn_entry);
+		auxv[0].a_type = elfc_putAddr(e, AT_ENTRY);
+		auxv[0].a_un.a_val = elfc_putAddr(e, dyn_entry);
+		auxv[1].a_type = elfc_putAddr(e, AT_BASE);
+		auxv[1].a_un.a_val = elfc_putAddr(e, dyn_entry);
 		rv = elfc_add_note(e, NT_AUXV, "CORE", 5, &auxv, sizeof(auxv));
 	} else {
 		pr_err("Unknown elfclass?: %d\n", elfclass);
