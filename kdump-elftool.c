@@ -652,7 +652,7 @@ free_page_maps(struct kdt_data *d)
 		return;
 
 	rv = page_range_addr_first(d->addr_tree, &p);
-	if (rv == BTREE_AT_END_OF_TREE)
+	if (rv)
 		is_end = 1;
 	while (!is_end) {
 		p2 = p;
