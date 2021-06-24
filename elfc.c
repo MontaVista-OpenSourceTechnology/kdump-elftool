@@ -2967,8 +2967,12 @@ elfc_open(struct elfc *e, int fd)
 	int rv;
 	size_t l;
 
-	elfc_freei(e);
-	memset(e, 0, sizeof(*e));
+	if (e->shdrs) {
+	    /* Already opened. */
+	    e->eerrno = EBUSY;
+	    return -1;
+	}
+
 	rv = lseek(fd, 0, SEEK_SET);
 	if (rv == -1) {
 		e->eerrno = errno;
@@ -3026,15 +3030,15 @@ elfc_open(struct elfc *e, int fd)
 	if (rv)
 		goto out;
 
+	rv = elfc_read_shdrs(e);
+	if (rv == -1)
+		goto out;
+
 	rv = validate_elf_header(e);
 	if (rv == -1) {
 		e->eerrno = EINVAL;
 		goto out;
 	}
-
-	rv = elfc_read_shdrs(e);
-	if (rv == -1)
-		goto out;
 
 	rv = elfc_read_phdrs(e);
 out:
