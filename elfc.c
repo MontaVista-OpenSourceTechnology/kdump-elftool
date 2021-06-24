@@ -43,6 +43,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdbool.h>
 
 #include "elfc.h"
 
@@ -525,17 +526,48 @@ out:
 
 struct elfc_tmpfile {
 	int fd;
+	unsigned int fd_open_refcount;
+	unsigned int refcount;
+};
+
+struct elfc_tmpfile_data {
+	struct elfc_tmpfile *tf;
+
+	/* File offset of the data. */
+	off_t offset;
+	size_t len;
+	bool opened;
 };
 
 static void *
-elfc_phdr_tmpfile_alloc(struct elfc *e)
+elfc_tmpfile_alloc(struct elfc *e, void **allocdata)
 {
-	struct elfc_tmpfile *tf;
+	struct elfc_tmpfile *tf = *allocdata;
+	struct elfc_tmpfile_data *td;
 
-	tf = malloc(sizeof(*tf));
-	if (tf)
+	td = malloc(sizeof(*td));
+	if (!td)
+		return NULL;
+
+	if (!tf) {
+		tf = malloc(sizeof(*tf));
+		if (!tf) {
+			free(td);
+			return NULL;
+		}
+		tf->fd_open_refcount = 0;
+		tf->refcount = 0;
 		tf->fd = -1;
-	return tf;
+		*allocdata = tf;
+	}
+
+	tf->refcount++;
+	td->tf = tf;
+	td->offset = 0;
+	td->len = 0;
+	td->opened = false;
+
+	return td;
 }
 
 /*
@@ -546,15 +578,20 @@ static int
 elfc_phdr_tmpfile_pre_write(struct elfc *e, GElf_Phdr *phdr,
 			    void *data, void *userdata)
 {
-	struct elfc_tmpfile *tf = userdata;
+	struct elfc_tmpfile_data *td = userdata;
+	struct elfc_tmpfile *tf = td->tf;
 	int fd;
 	int rv;
 
-	tf->fd = elfc_tmpfd();
 	if (tf->fd == -1) {
-		e->eerrno = errno;
-		return -1;
+		tf->fd = elfc_tmpfd();
+		if (tf->fd == -1) {
+			e->eerrno = errno;
+			return -1;
+		}
 	}
+	tf->fd_open_refcount++;
+	td->opened = true;
 
 	fd = elfc_get_fd(e);
 	rv = lseek(fd, phdr->p_offset, SEEK_SET);
@@ -562,6 +599,15 @@ elfc_phdr_tmpfile_pre_write(struct elfc *e, GElf_Phdr *phdr,
 		e->eerrno = errno;
 		return -1;
 	}
+
+	/* Save the current offset in the file so we can find it again. */
+	td->offset = lseek(tf->fd, 0, SEEK_CUR);
+	if (td->offset == -1) {
+		e->eerrno = errno;
+		return -1;
+	}
+	td->len = phdr->p_filesz;
+
 	rv = elfc_copy_fd_range(tf->fd, fd, phdr->p_filesz);
 	if (rv == -1) {
 		e->eerrno = errno;
@@ -574,10 +620,11 @@ static int
 elfc_phdr_tmpfile_do_write(struct elfc *e, int fd, GElf_Phdr *phdr,
 			   void *data, void *userdata)
 {
-	struct elfc_tmpfile *tf = userdata;
+	struct elfc_tmpfile_data *td = userdata;
+	struct elfc_tmpfile *tf = td->tf;
 	int rv;
 
-	rv = lseek(tf->fd, 0, SEEK_SET);
+	rv = lseek(tf->fd, td->offset, SEEK_SET);
 	if (rv == -1) {
 		e->eerrno = errno;
 		return -1;
@@ -589,8 +636,6 @@ elfc_phdr_tmpfile_do_write(struct elfc *e, int fd, GElf_Phdr *phdr,
 		return -1;
 	}
 
-	close(tf->fd);
-	tf->fd = -1;
 	return 0;
 }
 
@@ -598,9 +643,12 @@ static void
 elfc_phdr_tmpfile_post_write(struct elfc *e, GElf_Phdr *phdr,
 			     void *data, void *userdata)
 {
-	struct elfc_tmpfile *tf = userdata;
+	struct elfc_tmpfile_data *td = userdata;
+	struct elfc_tmpfile *tf = td->tf;
 
-	if (tf->fd != -1) {
+	tf->fd_open_refcount--;
+	td->opened = false;
+	if (tf->fd_open_refcount == 0) {
 		close(tf->fd);
 		tf->fd = -1;
 	}
@@ -657,8 +705,20 @@ elfc_phdr_tmpfile_set_data(struct elfc *e, GElf_Phdr *phdr, void *data,
 static void
 elfc_phdr_tmpfile_free(struct elfc *e, void *data, void *userdata)
 {
-	if (userdata)
-		free(userdata);
+	struct elfc_tmpfile_data *td = userdata;
+	struct elfc_tmpfile *tf = td->tf;
+
+	if (!td)
+		return;
+	tf = td->tf;
+	if (tf) {
+		if (td->opened)
+			elfc_phdr_tmpfile_post_write(e, NULL, NULL, userdata);
+		tf->refcount--;
+		if (tf->refcount == 0)
+			free(tf);
+	}
+	free(td);
 }
 
 int
@@ -859,17 +919,6 @@ elfc_phdr_alloc_read(struct elfc *e, int pnum, GElf_Off off,
 	return rv;
 }
 
-static void *
-elfc_shdr_tmpfile_alloc(struct elfc *e)
-{
-	struct elfc_tmpfile *tf;
-
-	tf = malloc(sizeof(*tf));
-	if (tf)
-		tf->fd = -1;
-	return tf;
-}
-
 /*
  * Create a copy of the contents in a temparary file.  This way if we
  * are reading and writing the same file, the data won't be clobbered.
@@ -878,21 +927,41 @@ static int
 elfc_shdr_tmpfile_pre_write(struct elfc *e, GElf_Shdr *shdr,
 			    void *data, void *userdata)
 {
-	struct elfc_tmpfile *tf = userdata;
+	struct elfc_tmpfile_data *td = userdata;
+	struct elfc_tmpfile *tf = td->tf;
 	int fd;
 	int rv;
 
-	tf->fd = elfc_tmpfd();
-	if (tf->fd == -1)
-		return -1;
+	if (tf->fd == -1) {
+		tf->fd = elfc_tmpfd();
+		if (tf->fd == -1) {
+			e->eerrno = errno;
+			return -1;
+		}
+	}
+	tf->fd_open_refcount++;
+	td->opened = true;
 
 	fd = elfc_get_fd(e);
 	rv = lseek(fd, shdr->sh_offset, SEEK_SET);
-	if (rv == -1)
+	if (rv == -1) {
 		e->eerrno = errno;
-	rv = elfc_copy_fd_range(tf->fd, fd, shdr->sh_size);
-	if (rv == -1)
 		return -1;
+	}
+
+	/* Save the current offset in the file so we can find it again. */
+	td->offset = lseek(tf->fd, 0, SEEK_CUR);
+	if (td->offset == -1) {
+		e->eerrno = errno;
+		return -1;
+	}
+	td->len = shdr->sh_size;
+
+	rv = elfc_copy_fd_range(tf->fd, fd, shdr->sh_size);
+	if (rv == -1) {
+		e->eerrno = errno;
+		return -1;
+	}
 	return 0;
 }
 
@@ -900,10 +969,11 @@ static int
 elfc_shdr_tmpfile_do_write(struct elfc *e, int fd, GElf_Shdr *shdr,
 			   void *data, void *userdata)
 {
-	struct elfc_tmpfile *tf = userdata;
+	struct elfc_tmpfile_data *td = userdata;
+	struct elfc_tmpfile *tf = td->tf;
 	int rv;
 
-	rv = lseek(tf->fd, 0, SEEK_SET);
+	rv = lseek(tf->fd, td->offset, SEEK_SET);
 	if (rv == -1)
 		return -1;
 
@@ -920,9 +990,12 @@ static void
 elfc_shdr_tmpfile_post_write(struct elfc *e, GElf_Shdr *shdr,
 			     void *data, void *userdata)
 {
-	struct elfc_tmpfile *tf = userdata;
+	struct elfc_tmpfile_data *td = userdata;
+	struct elfc_tmpfile *tf = td->tf;
 
-	if (tf->fd != -1) {
+	tf->fd_open_refcount--;
+	td->opened = false;
+	if (tf->fd_open_refcount == 0) {
 		close(tf->fd);
 		tf->fd = -1;
 	}
@@ -979,11 +1052,24 @@ elfc_shdr_tmpfile_set_data(struct elfc *e, GElf_Shdr *shdr, void *data,
 static void
 elfc_shdr_tmpfile_free(struct elfc *e, void *data, void *userdata)
 {
+	struct elfc_tmpfile_data *td = userdata;
+	struct elfc_tmpfile *tf = td->tf;
+
 	/* data is only set here in the case of symbol and string tables. */
 	if (data)
 		free(data);
-	if (userdata)
-		free(userdata);
+
+	if (!td)
+		return;
+	tf = td->tf;
+	if (tf) {
+		if (td->opened)
+			elfc_shdr_tmpfile_post_write(e, NULL, NULL, userdata);
+		tf->refcount--;
+		if (tf->refcount == 0)
+			free(tf);
+	}
+	free(td);
 }
 
 int
@@ -2318,6 +2404,7 @@ elfc_read_phdrs(struct elfc *e)
 	void *buf;
 	int rv;
 	GElf_Word phnum;
+	void *tmpdata = NULL;
 
 	rv = get_phnum(e, &phnum);
 	if (rv == -1)
@@ -2337,7 +2424,7 @@ elfc_read_phdrs(struct elfc *e)
 		int i;
 
 		for (i = 0; i < e->num_phdrs; i++) {
-			e->phdrs[i]->userdata = elfc_phdr_tmpfile_alloc(e);
+			e->phdrs[i]->userdata = elfc_tmpfile_alloc(e, &tmpdata);
 			if (!e->phdrs[i]->userdata) {
 				e->eerrno = ENOMEM;
 				return -1;
@@ -2514,6 +2601,7 @@ elfc_read_shdrs(struct elfc *e)
 	int rv;
 	Elf32_Word i;
 	const char *name;
+	void *tmpdata = NULL;
 
 	rv = elfc_alloc_read_data(e, e->hdr.e_shoff, &buf,
 				  e->hdr.e_shentsize * e->hdr.e_shnum);
@@ -2529,7 +2617,7 @@ elfc_read_shdrs(struct elfc *e)
 		return -1;
 
 	for (i = 0; i < e->num_shdrs; i++) {
-		e->shdrs[i].userdata = elfc_shdr_tmpfile_alloc(e);
+		e->shdrs[i].userdata = elfc_tmpfile_alloc(e, &tmpdata);
 		if (!e->shdrs[i].userdata) {
 			e->eerrno = ENOMEM;
 			return -1;
