@@ -3198,7 +3198,7 @@ addrandomoffset(int argc, char *argv[])
 
 		rv = elfc_del_note(velf, i);
 		if (rv == -1) {
-			pr_err("Error getting auxv from %s: %s\n",
+			pr_err("Error deleting old auxv from %s: %s\n",
 				vmcore, strerror(elfc_get_errno(velf)));
 			goto out;
 		}
