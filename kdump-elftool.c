@@ -657,9 +657,12 @@ free_page_maps(struct kdt_data *d)
 	while (!is_end) {
 		p2 = p;
 		rv = page_range_addr_delete(d->addr_tree, p2, &p, &is_end);
+		free(p2->bitmap);
 		free(p2);
 	}
 	page_range_addr_free(d->addr_tree);
+	free(d->addr_tree);
+	free(d->page_tree);
 }
 
 static struct page_range *
