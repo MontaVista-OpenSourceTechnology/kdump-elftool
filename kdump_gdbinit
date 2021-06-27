@@ -312,6 +312,7 @@ define thread_vminfo_x86_64
 	printf "OFFSET(thread_struct.sp)=%ld\n", &((struct thread_struct *) 0)->sp
 	printf "SYMBOL(__thread_sleep_point)=0\n"
 	printf "SIZE(context_switch_frame)=1\n"
+	printf "SYMBOL(__thread_sleep_caller)=0\n"
 end
 document thread_vminfo_x86_64
 	Dump information required by kdump-elftool to create a gdb thread

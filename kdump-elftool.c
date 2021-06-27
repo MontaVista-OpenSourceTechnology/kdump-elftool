@@ -2452,7 +2452,8 @@ enum thread_info_labels {
 	VMCI_OFFSET_task_struct__thread_group,
 	VMCI_OFFSET_task_struct__signal,
 	VMCI_OFFSET_task_struct__pid,
-	VMCI_OFFSET_task_struct__thread
+	VMCI_OFFSET_task_struct__thread,
+	VMCI_SYMBOL___thread_sleep_caller /* for X86_64 */
 };
 
 typedef int (*thread_handler)(struct kdt_data *d, GElf_Addr task,
@@ -2568,6 +2569,7 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 		VMCI_OFFSET(task_struct, signal),
 		VMCI_OFFSET(task_struct, pid),
 		VMCI_OFFSET(task_struct, thread),
+		VMCI_SYMBOL(__thread_sleep_caller),
 		{ NULL }
 	};
 	uint64_t task_addr, init_task_addr;
@@ -2611,6 +2613,11 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 	if (d->x86___thread_sleep_point_found)
 		d->x86___thread_sleep_point =
 			vmci[VMCI_SYMBOL___thread_sleep_point].val;
+	d->x86___thread_sleep_caller_found =
+		vmci[VMCI_SYMBOL___thread_sleep_caller].found;
+	if (d->x86___thread_sleep_caller_found)
+		d->x86___thread_sleep_caller =
+			vmci[VMCI_SYMBOL___thread_sleep_caller].val;
 	d->thread_sp_found = vmci[VMCI_OFFSET_thread_struct__sp].found;
 	if (d->thread_sp_found)
 		d->thread_sp = vmci[VMCI_OFFSET_thread_struct__sp].val;

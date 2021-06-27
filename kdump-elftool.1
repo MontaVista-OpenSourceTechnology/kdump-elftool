@@ -402,6 +402,22 @@ have to account for, too.  So keep looking and scanning for pushes,
 pops, and modifications to the rsp register.  If you don't calculate
 this correctly, the backtraces won't make any sense.
 
+There are times when this doesn't work quite right, and I haven't
+traced down why.  Sometimes it's off by 8.  But I have a work around.
+If you look at the stack frame, the RBP register should point to the
+previous instance of the RBP register and then caller of __schedule
+(or whatever it is in your instance).  If you can find the caller of
+__schedule, you can add:
+
+.RS 4
+SYMBOL(__thread_sleep_caller)=<address>
+.RE
+
+and set context_switch_frame to a smaller number.  Then the tool will
+search forward through memory to find the return address and set the
+RBP register appropriately.  For some threads this will cause some
+errors to be spit out, but it should help.
+
 .SH QEMU VMDUMP
 kdump-elftool can process QEMU vmdump file from i386 and x86_64
 systems.  It is, unfortunately, somewhat complicated because that file

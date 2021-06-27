@@ -289,6 +289,8 @@ struct kdt_data {
 	uint64_t x86___thread_sleep_point;
 	bool x86_context_switch_frame_size_found;
 	uint64_t x86_context_switch_frame_size;
+	bool x86___thread_sleep_caller_found;
+	uint64_t x86___thread_sleep_caller;
 	bool arm_thread_info_cpu_context_found;
 	uint64_t arm_thread_info_cpu_context;
 	bool arm___switch_to_found;

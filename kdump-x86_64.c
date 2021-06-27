@@ -249,6 +249,23 @@ x86_64_task_ptregs(struct kdt_data *d, GElf_Addr task, void *regs)
 
 		pt_regs->rbp = pt_regs->rsp + d->x86_context_switch_frame_size;
 		pt_regs->rip = d->x86___thread_sleep_point;
+		if (d->x86___thread_sleep_caller_found &&
+		    d->x86___thread_sleep_caller) {
+			uint64_t bp = pt_regs->rbp, val;
+			unsigned int count = 100;
+
+			for (count = 100; count > 0; count--, bp += 8) {
+				rv = fetch_vaddr64(d, bp, &val, "thread.bp");
+				if (rv) {
+					pr_err("Unable to fetch BP data stack, stack backtrace may be wrong.\n");
+					break;
+				}
+				if (val == d->x86___thread_sleep_caller) {
+					pt_regs->rbp = bp - 8;
+					break;
+				}
+			}
+		}
 	} else {
 		/* Context switch was redone in 4.9. */
 		/* Pushed BP register (frame pointer) is at this address. */
