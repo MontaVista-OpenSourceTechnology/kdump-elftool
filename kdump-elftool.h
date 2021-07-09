@@ -79,9 +79,9 @@ int copy_elf_notes(struct elfc *out, struct elfc *in,
 /*
  * Extracted information about which OS version we are running.
  */
-char *osrelease;
-int os_major_release;
-int os_minor_release;
+extern char *osrelease;
+extern int os_major_release;
+extern int os_minor_release;
 
 /*
  * Scan the vmcoreinfo in the notes looking for values.  A value
