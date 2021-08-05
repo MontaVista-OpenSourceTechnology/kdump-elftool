@@ -2414,6 +2414,15 @@ add_cpu_info(GElf_Word type, const char *name, size_t namelen,
 		}
 
 		cpu->pid = d->conv32(&pr->pr_pid);
+
+		/*
+		 * If pid is zero, that's an idle process, convert it's pid
+		 * to -cpunum so they have different numbers.
+		 */
+		if (cpu->pid == 0) {
+		    uint32_t cpunum = d->cpunum + 1;
+		    pr->pr_pid = -d->conv32(&cpunum);
+		}
 	} else {
 		struct kd_elf_prstatus32 *pr = data;
 
@@ -2423,6 +2432,10 @@ add_cpu_info(GElf_Word type, const char *name, size_t namelen,
 		}
 
 		cpu->pid = d->conv32(&pr->pr_pid);
+		if (cpu->pid == 0) {
+		    uint32_t cpunum = d->cpunum + 1;
+		    pr->pr_pid = -d->conv32(&cpunum);
+		}
 	}
 	cpu->cpu = d->cpunum;
 	cpu->next = d->cpus;
