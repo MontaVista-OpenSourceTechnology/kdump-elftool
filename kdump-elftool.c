@@ -2457,6 +2457,8 @@ enum thread_info_labels {
 	VMCI_OFFSET_thread__cpu_context, /* for ARM64 */
 	VMCI_OFFSET_task_struct__thread_node,
 	VMCI_OFFSET_signal_struct__thread_head,
+	VMCI_SYMBOL___thread_sleep_caller, /* for X86_64 */
+	VMCI_SIZE___switch_rsp_rbp_offset, /* for X86_64 */
 	/* Begin required elements. */
 #define KV_REQ VMCI_SYMBOL_init_task
 	VMCI_SYMBOL_init_task,
@@ -2465,8 +2467,7 @@ enum thread_info_labels {
 	VMCI_OFFSET_task_struct__thread_group,
 	VMCI_OFFSET_task_struct__signal,
 	VMCI_OFFSET_task_struct__pid,
-	VMCI_OFFSET_task_struct__thread,
-	VMCI_SYMBOL___thread_sleep_caller /* for X86_64 */
+	VMCI_OFFSET_task_struct__thread
 };
 
 typedef int (*thread_handler)(struct kdt_data *d, GElf_Addr task,
@@ -2575,6 +2576,8 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 		VMCI_OFFSET(thread, cpu_context),
 		VMCI_OFFSET(task_struct, thread_node),
 		VMCI_OFFSET(signal_struct, thread_head),
+		VMCI_SYMBOL(__thread_sleep_caller),
+		VMCI_SIZE(__switch_rsp_rbp_offset),
 		VMCI_SYMBOL(init_task),
 		VMCI_OFFSET(task_struct, stack),
 		VMCI_OFFSET(task_struct, tasks),
@@ -2582,7 +2585,6 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 		VMCI_OFFSET(task_struct, signal),
 		VMCI_OFFSET(task_struct, pid),
 		VMCI_OFFSET(task_struct, thread),
-		VMCI_SYMBOL(__thread_sleep_caller),
 		{ NULL }
 	};
 	uint64_t task_addr, init_task_addr;
@@ -2631,6 +2633,11 @@ handle_kernel_processes_threads(struct kdt_data *d, thread_handler handler,
 	if (d->x86___thread_sleep_caller_found)
 		d->x86___thread_sleep_caller =
 			vmci[VMCI_SYMBOL___thread_sleep_caller].val;
+	d->x86___switch_rsp_rbp_offset_found =
+		vmci[VMCI_SIZE___switch_rsp_rbp_offset].found;
+	if (d->x86___switch_rsp_rbp_offset_found)
+		d->x86___switch_rsp_rbp_offset =
+			vmci[VMCI_SIZE___switch_rsp_rbp_offset].val;
 	d->thread_sp_found = vmci[VMCI_OFFSET_thread_struct__sp].found;
 	if (d->thread_sp_found)
 		d->thread_sp = vmci[VMCI_OFFSET_thread_struct__sp].val;

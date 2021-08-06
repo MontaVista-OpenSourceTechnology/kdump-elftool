@@ -234,23 +234,39 @@ x86_64_task_ptregs(struct kdt_data *d, GElf_Addr task, void *regs)
 	if (os_major_release < 4 ||
 	    (os_major_release == 4 && os_minor_release < 9)) {
 		if (!d->x86___thread_sleep_point_found ||
-		    !d->x86_context_switch_frame_size_found) {
+		    !(d->x86_context_switch_frame_size_found ||
+		      d->x86___switch_rsp_rbp_offset_found)) {
 			pr_err("x86-specific thread symbols not found, ptregs "
-			       "cannot be extracted.\n");
+			       "cannot be extracted.  See manual on x86_64\n");
 			return -1;
 		}
 
-		if (d->x86_context_switch_frame_size == 1) {
-			pr_err("You must set SIZE(context_switch_frame) in "
+		pt_regs->rip = d->x86___thread_sleep_point;
+
+		if (d->x86___switch_rsp_rbp_offset_found &&
+		    d->x86___switch_rsp_rbp_offset != 1) {
+			uint64_t val;
+
+			rv = fetch_vaddr64(d, pt_regs->rsp, &val, "thread.bp");
+			if (rv)
+				pr_err("Unable to fetch SP data stack, stack backtrace may be wrong.\n");
+			else
+				pt_regs->rbp = val;
+			goto out;
+		}
+
+		if (!d->x86_context_switch_frame_size_found ||
+		    d->x86_context_switch_frame_size == 1) {
+			pr_err("You must set SIZE(context_switch_frame) or "
+			       "SIZE(switch_rsp_rbp_offset) in "
 			       "your extracted symbols.  See the man page "
 			       "for details.\n");
 			return -1;
 		}
 
 		pt_regs->rbp = pt_regs->rsp + d->x86_context_switch_frame_size;
-		pt_regs->rip = d->x86___thread_sleep_point;
 		if (d->x86___thread_sleep_caller_found &&
-		    d->x86___thread_sleep_caller) {
+		    d->x86___thread_sleep_caller > 1) {
 			uint64_t bp = pt_regs->rbp, val;
 			unsigned int count = 100;
 
@@ -289,7 +305,7 @@ x86_64_task_ptregs(struct kdt_data *d, GElf_Addr task, void *regs)
 	}
 
 	/* We should only need the EIP, EBP and ESP. */
-
+out:
 	return 0;
 }
 

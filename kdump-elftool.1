@@ -351,11 +351,29 @@ Note that __schedule may not call __switch_to.  You will have to
 find the function that __schedule calls that calls __switch_to,
 (like __schedule_nobkl) and do the procedure in that function.
 
-Now that you know where __switch_to is called from, you need to
-calculate the amount of stack used in that function at the point where
-__switch_to is called, so the program can properly calculate the value
-of BP.  To calculate it, load the vmlinux file into gdb (as before)
-and do
+Now that you know where __switch_to is called from, you need to find
+the rbp register.  If in the instructions above the call to __switch_to
+you see:
+
+.RS 4
+push   %rbp
+.RE
+
+you are in luck!  You can just get rbp from the stack offset by setting:
+
+.RS 4
+SIZE(__switch_rsp_rbp_offset)=<offset>
+.RE
+
+to the offset from rsp to rbp.  This offset is the number of pushes
+between the rbp push and the call to __switch_to, times 8.  So if the
+rbp push is the last push before calling __switch_to, then offset will
+be zero.
+
+If you aren't so lucky, you must calculate the amount of stack used in
+that function at the point where __switch_to is called, so the program
+can properly calculate the value of BP.  To calculate it, load the
+vmlinux file into gdb (as before) and do
 
 .RS 4
 x/20i __schedule
@@ -402,12 +420,17 @@ have to account for, too.  So keep looking and scanning for pushes,
 pops, and modifications to the rsp register.  If you don't calculate
 this correctly, the backtraces won't make any sense.
 
-There are times when this doesn't work quite right, and I haven't
-traced down why.  Sometimes it's off by 8.  But I have a work around.
-If you look at the stack frame, the RBP register should point to the
-previous instance of the RBP register and then caller of __schedule
-(or whatever it is in your instance).  If you can find the caller of
-__schedule, you can add:
+There are times when this doesn't work quite right, if you see:
+
+.RS 4
+and    $0xfffffffffffffff0,%rsp
+.RE
+
+at the top of __schedule, sometimes it's going to be off by 8.  But I
+have a work around.  If you look at the stack frame, the RBP register
+should point to the previous instance of the RBP register and then
+caller of __schedule (or whatever it is in your instance).  If you can
+find the caller of __schedule, you can add:
 
 .RS 4
 SYMBOL(__thread_sleep_caller)=<address>

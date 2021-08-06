@@ -287,6 +287,8 @@ struct kdt_data {
 	uint64_t thread_ip;
 	bool x86___thread_sleep_point_found;
 	uint64_t x86___thread_sleep_point;
+	bool x86___switch_rsp_rbp_offset_found;
+	uint64_t x86___switch_rsp_rbp_offset;
 	bool x86_context_switch_frame_size_found;
 	uint64_t x86_context_switch_frame_size;
 	bool x86___thread_sleep_caller_found;

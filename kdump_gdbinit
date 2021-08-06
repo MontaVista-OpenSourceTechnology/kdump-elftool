@@ -311,6 +311,7 @@ define thread_vminfo_x86_64
 	thread_vminfo_base
 	printf "OFFSET(thread_struct.sp)=%ld\n", &((struct thread_struct *) 0)->sp
 	printf "SYMBOL(__thread_sleep_point)=0\n"
+	printf "SIZE(__switch_rsp_rbp_offset)=1\n"
 	printf "SIZE(context_switch_frame)=1\n"
 	printf "SYMBOL(__thread_sleep_caller)=0\n"
 end
