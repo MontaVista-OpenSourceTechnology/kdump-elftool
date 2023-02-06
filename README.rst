@@ -52,8 +52,8 @@ To use this, you must get a dump of kernel memory.  You have two
 options: use kexec/kdump (optionally with makedumpfile), or take a
 vmdump from qemu if you are running in qemu.
 
-kexec/kdump
------------
+Using kdump-elftool To Extract Your Coredump
+--------------------------------------------
 
 For kexec/kdump see the man page for kexec for instructions to get
 into a crash dump kernel (the kernel that boots from the crashed
@@ -102,6 +102,11 @@ You might have to add a vminfo file if the dump file does not have
 vmcoreinfo data in it, the tool will tell you if that is the case.
 This is the same procedure as getting the vminfo file in qemu
 below.
+
+For these types of dumps, you use the "-I kdump" option to specify
+what it is, like:
+
+  kdump-elftool tovelf -I kdump -i pmcore -o vmcore -m vmlinux
 
 qemu
 ----
