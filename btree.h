@@ -1,5 +1,5 @@
 /*
- * bree.h
+ * btree.h
  *
  * A btree "generic" or "template" in C.
  *
@@ -179,25 +179,18 @@
 #define BTREE_OUT_OF_MEMORY		-4
 
 #include <stdlib.h>
+#include <assert.h>
 
 /* This code was lifted from an Ada95 Btree engine, that's why the
    coding style is so unusual, and there are no comments.  It's the
    Adasl Btree, see that for the actual comments. */
 
-struct BTREE_EXPORT_NAME(btree_leaf_s);
-typedef struct BTREE_EXPORT_NAME(btree_leaf_s) BTREE_EXPORT_NAME(btree_leaf_t);
 struct BTREE_EXPORT_NAME(btree_node_s);
 typedef struct BTREE_EXPORT_NAME(btree_node_s) BTREE_EXPORT_NAME(btree_node_t);
-
-struct BTREE_EXPORT_NAME(btree_leaf_s)
-{
-    char         First;
-    char         Last;
-    char         Parent_Index;
-    char         Leaf;
-    BTREE_EXPORT_NAME(btree_node_t) *Parent;
-    btree_val_t  Vals[BTREE_NODE_SIZE];
-};
+struct BTREE_EXPORT_NAME(btree_leaf_s);
+typedef struct BTREE_EXPORT_NAME(btree_leaf_s) BTREE_EXPORT_NAME(btree_leaf_t);
+struct BTREE_EXPORT_NAME(btree_nleaf_s);
+typedef struct BTREE_EXPORT_NAME(btree_nleaf_s) BTREE_EXPORT_NAME(btree_nleaf_t);
 
 struct BTREE_EXPORT_NAME(btree_node_s)
 {
@@ -207,9 +200,77 @@ struct BTREE_EXPORT_NAME(btree_node_s)
     char         Leaf;
     BTREE_EXPORT_NAME(btree_node_t) *Parent;
     btree_val_t  Vals[BTREE_NODE_SIZE];
+};
+
+struct BTREE_EXPORT_NAME(btree_leaf_s)
+{
+    BTREE_EXPORT_NAME(btree_node_t) node;
+};
+
+struct BTREE_EXPORT_NAME(btree_nleaf_s)
+{
+    BTREE_EXPORT_NAME(btree_node_t) node;
     BTREE_EXPORT_NAME(btree_node_t) *(Children[BTREE_NODE_SIZE]);
     BTREE_EXPORT_NAME(btree_node_t) *Right_Child;
 };
+
+static BTREE_EXPORT_NAME(btree_leaf_t) *
+BTREE_EXPORT_NAME(container_of_leaf)(BTREE_EXPORT_NAME(btree_node_t) *ptr)
+{
+    assert(ptr->Leaf);
+    return ((BTREE_EXPORT_NAME(btree_leaf_t) *)(((char *) ptr)
+			- offsetof(BTREE_EXPORT_NAME(btree_leaf_t), node)));
+}
+
+static BTREE_EXPORT_NAME(btree_nleaf_t) *
+BTREE_EXPORT_NAME(container_of_nleaf)(BTREE_EXPORT_NAME(btree_node_t) *ptr)
+{
+    assert(!ptr->Leaf);
+    return ((BTREE_EXPORT_NAME(btree_nleaf_t) *)(((char *) ptr)
+			- offsetof(BTREE_EXPORT_NAME(btree_nleaf_t), node)));
+}
+
+static BTREE_EXPORT_NAME(btree_node_t) *
+BTREE_EXPORT_NAME(Get_Child)(BTREE_EXPORT_NAME(btree_node_t) *node, int index)
+{
+    BTREE_EXPORT_NAME(btree_nleaf_t) *nl
+	= BTREE_EXPORT_NAME(container_of_nleaf)(node);
+
+    return nl->Children[index];
+}
+
+static void
+BTREE_EXPORT_NAME(Set_Child)(BTREE_EXPORT_NAME(btree_node_t) *node, int index,
+			     BTREE_EXPORT_NAME(btree_node_t) *child)
+{
+    BTREE_EXPORT_NAME(btree_nleaf_t) *nl
+	= BTREE_EXPORT_NAME(container_of_nleaf)(node);
+
+    nl->Children[index] = child;
+    child->Parent = node;
+    child->Parent_Index = index;
+}
+
+static BTREE_EXPORT_NAME(btree_node_t) *
+BTREE_EXPORT_NAME(Get_Right_Child)(BTREE_EXPORT_NAME(btree_node_t) *node)
+{
+    BTREE_EXPORT_NAME(btree_nleaf_t) *nl
+	= BTREE_EXPORT_NAME(container_of_nleaf)(node);
+
+    return nl->Right_Child;
+}
+
+static void
+BTREE_EXPORT_NAME(Set_Right_Child)(BTREE_EXPORT_NAME(btree_node_t) *node,
+				   BTREE_EXPORT_NAME(btree_node_t) *child)
+{
+    BTREE_EXPORT_NAME(btree_nleaf_t) *nl
+	= BTREE_EXPORT_NAME(container_of_nleaf)(node);
+
+    nl->Right_Child = child;
+    child->Parent_Index = BTREE_NODE_SIZE;
+    child->Parent = node;
+}
 
 typedef struct BTREE_EXPORT_NAME(btree_s)
 {
@@ -274,8 +335,10 @@ BTREE_EXPORT_NAME(Local_First) (btree_t      *tree,
     else {
 	*Is_End = 0;
 	Retval_Pos = tree->Root;
-	while (! Retval_Pos->Leaf)
-            Retval_Pos = Retval_Pos->Children[(int) Retval_Pos->First];
+	while (! Retval_Pos->Leaf) {
+            Retval_Pos = BTREE_EXPORT_NAME(Get_Child)(Retval_Pos,
+						      Retval_Pos->First);
+	}
 	*Pos = Retval_Pos;
         *Index = Retval_Pos->First;
     }
@@ -318,9 +381,11 @@ BTREE_EXPORT_NAME(Local_Next) (btree_t      *tree,
             *Index = BTREE_EXPORT_NAME(Next)(*Pos, *Index);
 	} else {
             *Is_End = 0;
-            Tmp_Pos = (*Pos)->Children[BTREE_EXPORT_NAME(Next)(*Pos, *Index)];
-            while (! Tmp_Pos->Leaf)
-		Tmp_Pos = Tmp_Pos->Children[(int) Tmp_Pos->First];
+            Tmp_Pos = BTREE_EXPORT_NAME(Get_Child)(*Pos,
+				     BTREE_EXPORT_NAME(Next)(*Pos, *Index));
+            while (! Tmp_Pos->Leaf) {
+		Tmp_Pos = BTREE_EXPORT_NAME(Get_Child)(Tmp_Pos, Tmp_Pos->First);
+	    }
             *Pos = Tmp_Pos;
             *Index = Tmp_Pos->First;
 	}
@@ -340,9 +405,10 @@ BTREE_EXPORT_NAME(Local_Next) (btree_t      *tree,
 	    }
 	} else {
             *Is_End = 0;
-            Tmp_Pos = (*Pos)->Right_Child;
-            while (! Tmp_Pos->Leaf)
-               Tmp_Pos = Tmp_Pos->Children[(int) Tmp_Pos->First];
+            Tmp_Pos = BTREE_EXPORT_NAME(Get_Right_Child)(*Pos);
+            while (! Tmp_Pos->Leaf) {
+		Tmp_Pos = BTREE_EXPORT_NAME(Get_Child)(Tmp_Pos, Tmp_Pos->First);
+            }
             *Pos = Tmp_Pos;
             *Index = Tmp_Pos->First;
 	}
@@ -364,9 +430,10 @@ BTREE_EXPORT_NAME(Local_Prev) (btree_t      *tree,
             *Index = BTREE_EXPORT_NAME(Prev)(*Pos, *Index);
 	} else {
             *Is_End = 0;
-            Tmp_Pos = (*Pos)->Children[*Index];
+            Tmp_Pos = BTREE_EXPORT_NAME(Get_Child)(*Pos,
+				     BTREE_EXPORT_NAME(Next)(*Pos, *Index));
             while (! Tmp_Pos->Leaf) {
-               Tmp_Pos = Tmp_Pos->Right_Child;
+	       Tmp_Pos = BTREE_EXPORT_NAME(Get_Right_Child)(Tmp_Pos);
             }
             *Pos = Tmp_Pos;
             *Index = Tmp_Pos->Last;
@@ -394,9 +461,9 @@ BTREE_EXPORT_NAME(Local_Prev) (btree_t      *tree,
             }
          } else {
 	     *Is_End = 0;
-	     Tmp_Pos = (*Pos)->Children[(int) (*Pos)->First];
+	     Tmp_Pos = BTREE_EXPORT_NAME(Get_Child)(*Pos, (*Pos)->First);
 	     while (! Tmp_Pos->Leaf) {
-		 Tmp_Pos = Tmp_Pos->Right_Child;
+		 Tmp_Pos = BTREE_EXPORT_NAME(Get_Right_Child)(Tmp_Pos);
 	     }
 	     *Pos = Tmp_Pos;
 	     *Index = Tmp_Pos->Last;
@@ -432,7 +499,7 @@ BTREE_EXPORT_NAME(Local_Search) (btree_t      *tree,
 		*Found = 0;
 		return;
             }
-            Retval_Pos = Retval_Pos->Children[Retval_Index];
+            Retval_Pos = BTREE_EXPORT_NAME(Get_Child)(Retval_Pos, Retval_Index);
             Retval_Index = Retval_Pos->First;
 	} else if (Retval_Index == Retval_Pos->Last) {
             if (Retval_Pos->Leaf) {
@@ -441,7 +508,7 @@ BTREE_EXPORT_NAME(Local_Search) (btree_t      *tree,
 		*Found = 0;
 		return;
             }
-            Retval_Pos = Retval_Pos->Right_Child;
+            Retval_Pos = BTREE_EXPORT_NAME(Get_Right_Child)(Retval_Pos);
             Retval_Index = Retval_Pos->First;
 	} else {
             Retval_Index = BTREE_EXPORT_NAME(Next)(Retval_Pos, Retval_Index);
@@ -472,7 +539,7 @@ BTREE_EXPORT_NAME(Left_Node) (btree_t      *tree,
             Prev_Index = BTREE_EXPORT_NAME(Prev)(Pos->Parent,
 						 Pos->Parent_Index);
 	}
-	Retval = Pos->Parent->Children[Prev_Index];
+	Retval = BTREE_EXPORT_NAME(Get_Child)(Pos->Parent, Prev_Index);
     }
 
     return Retval;
@@ -491,11 +558,11 @@ BTREE_EXPORT_NAME(Right_Node) (btree_t      *tree,
 	Retval = NULL;
     } else {
 	if (Pos->Parent_Index == Pos->Parent->Last) {
-            Retval = Pos->Parent->Right_Child;
+            Retval = BTREE_EXPORT_NAME(Get_Right_Child)(Pos->Parent);
 	} else {
             Next_Index = BTREE_EXPORT_NAME(Next)(Pos->Parent,
 						 Pos->Parent_Index);
-            Retval = Pos->Parent->Children[Next_Index];
+            Retval = BTREE_EXPORT_NAME(Get_Child)(Pos->Parent, Next_Index);
 	}
     }
 
@@ -515,7 +582,7 @@ BTREE_EXPORT_NAME(Insert_Shift_Left) (btree_t      *tree,
     btree_val_t  Hold_Val;
     BTREE_EXPORT_NAME(btree_node_t) *Hold_Child = NULL;
     btree_val_t  Tmp_Val;
-    BTREE_EXPORT_NAME(btree_node_t) *Tmp_Child;
+    BTREE_EXPORT_NAME(btree_node_t) *Tmp_Child, *Tmp_Child2;
     int          Curr_Index;
     int          Next_Index;
     int          Parent_Index;
@@ -524,12 +591,10 @@ BTREE_EXPORT_NAME(Insert_Shift_Left) (btree_t      *tree,
          Hold_Val = Curr_Node->Vals[(int) Curr_Node->First];
          Curr_Node->Vals[(int) Curr_Node->First] = Val;
          if (Child != NULL) {
-	     Hold_Child = Curr_Node->Children[(int) Curr_Node->First];
+	     Hold_Child = BTREE_EXPORT_NAME(Get_Child)(Curr_Node,
+						       Curr_Node->First);
 
-	     Curr_Node->Children[(int) Curr_Node->First] = Child;
-	     Curr_Node->Children[(int) Curr_Node->First]->Parent = Curr_Node;
-	     Curr_Node->Children[(int) Curr_Node->First]->Parent_Index
-		 = Curr_Node->First;
+	     BTREE_EXPORT_NAME(Set_Child)(Curr_Node, Curr_Node->First, Child);
          }
          Curr_Node->First = BTREE_EXPORT_NAME(Next)(Curr_Node,
 						    Curr_Node->First);
@@ -555,19 +620,18 @@ BTREE_EXPORT_NAME(Insert_Shift_Left) (btree_t      *tree,
 	Curr_Node->Vals[Curr_Index] = Val;
 	
 	if (Child != NULL) {
-	    Hold_Child = Curr_Node->Children[(int) Curr_Node->First];
+	    Hold_Child = BTREE_EXPORT_NAME(Get_Child)(Curr_Node,
+						      Curr_Node->First);
 	    Curr_Index = Curr_Node->First;
 	    Next_Index = BTREE_EXPORT_NAME(Next)(Curr_Node, Curr_Index);
 	    while (Next_Index != *Index) {
-		Curr_Node->Children[Curr_Index]
-		    = Curr_Node->Children[Next_Index];
-		Curr_Node->Children[Curr_Index]->Parent_Index = Curr_Index;
+		Tmp_Child = BTREE_EXPORT_NAME(Get_Child)(Curr_Node, Next_Index);
+
+		BTREE_EXPORT_NAME(Set_Child)(Curr_Node, Curr_Index, Tmp_Child);
 		Curr_Index = Next_Index;
 		Next_Index = BTREE_EXPORT_NAME(Next)(Curr_Node, Next_Index);
 	    }
-	    Curr_Node->Children[Curr_Index] = Child;
-            Curr_Node->Children[Curr_Index]->Parent = Curr_Node;
-            Curr_Node->Children[Curr_Index]->Parent_Index = Curr_Index;
+	    BTREE_EXPORT_NAME(Set_Child)(Curr_Node, Curr_Index, Child);
 	}
 	*Index = Curr_Index;
 	Search_Node = BTREE_EXPORT_NAME(Left_Node)(tree, Curr_Node);
@@ -589,16 +653,14 @@ BTREE_EXPORT_NAME(Insert_Shift_Left) (btree_t      *tree,
 	Search_Node->Vals[(int) Search_Node->First] = Tmp_Val;
 
 	if (Child != NULL) {
-            Tmp_Child = Search_Node->Children[(int) Search_Node->First];
+            Tmp_Child = BTREE_EXPORT_NAME(Get_Child)(Search_Node,
+						     Search_Node->First);
+            Tmp_Child2 = BTREE_EXPORT_NAME(Get_Right_Child)(Search_Node);
 
-            Search_Node->Children[(int) Search_Node->First]
-		= Search_Node->Right_Child;
-            Search_Node->Children[(int) Search_Node->First]->Parent_Index
-		= Search_Node->First;
+            BTREE_EXPORT_NAME(Set_Child)(Search_Node, Search_Node->First,
+					 Tmp_Child2);
 
-            Search_Node->Right_Child = Hold_Child;
-            Search_Node->Right_Child->Parent = Search_Node;
-            Search_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+	    BTREE_EXPORT_NAME(Set_Right_Child)(Search_Node, Hold_Child);
 	    
             Hold_Child = Tmp_Child;
 	}
@@ -630,13 +692,11 @@ BTREE_EXPORT_NAME(Insert_Shift_Left) (btree_t      *tree,
 						  Search_Node->Last);
       Search_Node->Vals[(int) Search_Node->Last] = Tmp_Val;
       if (Child != NULL) {
-	  Search_Node->Children[(int) Search_Node->Last] = Search_Node->Right_Child;
-	  Search_Node->Children[(int) Search_Node->Last]->Parent_Index
-	      = Search_Node->Last;
+	  Tmp_Child = BTREE_EXPORT_NAME(Get_Right_Child)(Search_Node);
+	  BTREE_EXPORT_NAME(Set_Child)(Search_Node, Search_Node->Last,
+				       Tmp_Child);
 
-	  Search_Node->Right_Child = Hold_Child;
-	  Search_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
-	  Search_Node->Right_Child->Parent = Search_Node;
+	  BTREE_EXPORT_NAME(Set_Right_Child)(Search_Node, Hold_Child);
       }
 }
 
@@ -654,17 +714,15 @@ BTREE_EXPORT_NAME(Insert_Shift_Right) (btree_t      *tree,
     btree_val_t  Hold_Val;
     BTREE_EXPORT_NAME(btree_node_t) *Hold_Child = NULL;
     btree_val_t  Tmp_Val;
-    BTREE_EXPORT_NAME(btree_node_t) *Tmp_Child;
+    BTREE_EXPORT_NAME(btree_node_t) *Tmp_Child, *Tmp_Child2;
     int          Curr_Index;
     int          Prev_Index;
 
     if (Rightmost) {
 	Hold_Val = Val;
 	if (Child != NULL) {
-            Hold_Child = Curr_Node->Right_Child;
-            Curr_Node->Right_Child = Child;
-            Curr_Node->Right_Child->Parent = Curr_Node;
-            Curr_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+            Hold_Child = BTREE_EXPORT_NAME(Get_Right_Child)(Curr_Node);
+	    BTREE_EXPORT_NAME(Set_Right_Child)(Curr_Node, Child);
 	}
 	Search_Node = BTREE_EXPORT_NAME(Right_Node)(tree, Curr_Node);
 	*Pos = Search_Node;
@@ -680,20 +738,18 @@ BTREE_EXPORT_NAME(Insert_Shift_Right) (btree_t      *tree,
 	Curr_Node->Vals[*Index] = Val;
 
 	if (Child != NULL) {
-	    Hold_Child = Curr_Node->Right_Child;
+	    Hold_Child = BTREE_EXPORT_NAME(Get_Right_Child)(Curr_Node);
 	    Curr_Index = Curr_Node->Last;
-	    Curr_Node->Right_Child = Curr_Node->Children[Curr_Index];
-	    Curr_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+	    Tmp_Child = BTREE_EXPORT_NAME(Get_Child)(Curr_Node, Curr_Index);
+	    BTREE_EXPORT_NAME(Set_Right_Child)(Curr_Node, Tmp_Child);
 	    while (Curr_Index != *Index) {
 		Prev_Index = BTREE_EXPORT_NAME(Prev)(Curr_Node, Curr_Index);
-		Curr_Node->Children[Curr_Index]
-		    = Curr_Node->Children[Prev_Index];
-		Curr_Node->Children[Curr_Index]->Parent_Index = Curr_Index;
+		Tmp_Child2 = BTREE_EXPORT_NAME(Get_Child)(Curr_Node,
+							  Prev_Index);
+		BTREE_EXPORT_NAME(Set_Child)(Curr_Node, Curr_Index, Tmp_Child2);
 		Curr_Index = Prev_Index;
 	    }
-	    Curr_Node->Children[*Index] = Child;
-	    Curr_Node->Children[*Index]->Parent_Index = *Index;
-	    Curr_Node->Children[*Index]->Parent = Curr_Node;
+	    BTREE_EXPORT_NAME(Set_Child)(Curr_Node, *Index, Child);
 	}
 	Search_Node = BTREE_EXPORT_NAME(Right_Node)(tree, Curr_Node);
     }
@@ -707,16 +763,13 @@ BTREE_EXPORT_NAME(Insert_Shift_Right) (btree_t      *tree,
 	Search_Node->Vals[(int) Search_Node->Last] = Tmp_Val;
 
 	if (Child != NULL) {
-            Tmp_Child = Search_Node->Right_Child;
-            Search_Node->Right_Child
-		= Search_Node->Children[(int) Search_Node->Last];
-            Search_Node->Right_Child->Parent = Search_Node;
-            Search_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+            Tmp_Child = BTREE_EXPORT_NAME(Get_Right_Child)(Search_Node);
+	    Tmp_Child2 = BTREE_EXPORT_NAME(Get_Child)(Search_Node,
+						      Search_Node->Last);
+	    BTREE_EXPORT_NAME(Set_Right_Child)(Search_Node, Tmp_Child2);
 
-            Search_Node->Children[(int) Search_Node->Last] = Hold_Child;
-            Search_Node->Children[(int) Search_Node->Last]->Parent = Search_Node;
-            Search_Node->Children[(int) Search_Node->Last]->Parent_Index
-		= Search_Node->Last;
+	    BTREE_EXPORT_NAME(Set_Child)(Search_Node, Search_Node->Last,
+					 Hold_Child);
 
             Hold_Child = Tmp_Child;
 	}
@@ -741,10 +794,8 @@ BTREE_EXPORT_NAME(Insert_Shift_Right) (btree_t      *tree,
 						 Search_Node->First);
     Search_Node->Vals[(int) Search_Node->First] = Hold_Val;
     if (Child != NULL) {
-	Search_Node->Children[(int) Search_Node->First] = Hold_Child;
-	Search_Node->Children[(int) Search_Node->First]->Parent = Search_Node;
-	Search_Node->Children[(int) Search_Node->First]->Parent_Index
-	    = Search_Node->First;
+	BTREE_EXPORT_NAME(Set_Child)(Search_Node, Search_Node->First,
+				     Hold_Child);
     }
 }
 
@@ -756,20 +807,20 @@ BTREE_EXPORT_NAME(Alloc_Leaf) (btree_t *tree)
     New_Node = malloc(sizeof(*New_Node));
     if (New_Node) {
 	memset(New_Node, 0, sizeof(*New_Node));
-	New_Node->Leaf = 1;
+	New_Node->node.Leaf = 1;
     }
-    return (BTREE_EXPORT_NAME(btree_node_t) *) New_Node;
+    return &New_Node->node;
 }
 
 static BTREE_EXPORT_NAME(btree_node_t) *
 BTREE_EXPORT_NAME(Alloc_Node) (btree_t *tree)
 {
-    BTREE_EXPORT_NAME(btree_node_t) *New_Node;
+    BTREE_EXPORT_NAME(btree_nleaf_t) *New_Node;
 
     New_Node = malloc(sizeof(*New_Node));
     if (New_Node)
 	memset(New_Node, 0, sizeof(*New_Node));
-    return New_Node;
+    return &New_Node->node;
 }
 
 static int
@@ -782,7 +833,7 @@ BTREE_EXPORT_NAME(Split_Node) (btree_t      *tree,
 	    btree_val_t  *Parent_Val,
 	    BTREE_EXPORT_NAME(btree_node_t) **Parent_Child)
 {
-    BTREE_EXPORT_NAME(btree_node_t) *New_Node;
+    BTREE_EXPORT_NAME(btree_node_t) *New_Node, *Tmp_Node;
     int          J;
     int          Curr_Index;
     int          Prev_Index;
@@ -808,17 +859,15 @@ BTREE_EXPORT_NAME(Split_Node) (btree_t      *tree,
 	 for (I=0; I<BTREE_NODE_SIZE/2; I++) {
 	     New_Node->Vals[I] = (*Pos)->Vals[Curr_Index];
 	     if (Child != NULL) {
-		 New_Node->Children[I] = (*Pos)->Children[Curr_Index];
-		 New_Node->Children[I]->Parent = New_Node;
-		 New_Node->Children[I]->Parent_Index = I;
+		 Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(*Pos, Curr_Index);
+		 BTREE_EXPORT_NAME(Set_Child)(New_Node, I, Tmp_Node);
 	     }
 	     Curr_Index = BTREE_EXPORT_NAME(Next)(*Pos, Curr_Index);
          }
 
          if (Child != NULL) {
-	     New_Node->Right_Child = (*Pos)->Children[Curr_Index];
-	     New_Node->Right_Child->Parent = New_Node;
-	     New_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+	     Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(*Pos, Curr_Index);
+	     BTREE_EXPORT_NAME(Set_Right_Child)(New_Node, Tmp_Node);
          }
          *Parent_Val = (*Pos)->Vals[Curr_Index];
          Prev_Index = Curr_Index;
@@ -832,9 +881,7 @@ BTREE_EXPORT_NAME(Split_Node) (btree_t      *tree,
 	     (*Pos)->Last = BTREE_EXPORT_NAME(Next)(*Pos, (*Pos)->Last);
 	     (*Pos)->Vals[(int) (*Pos)->Last] = Val;
 	     if (Child != NULL) {
-		 (*Pos)->Children[(int) (*Pos)->Last] = Child;
-		 (*Pos)->Children[(int) (*Pos)->Last]->Parent = (*Pos);
-		 (*Pos)->Children[(int) (*Pos)->Last]->Parent_Index = (*Pos)->Last;
+		 BTREE_EXPORT_NAME(Set_Child)(*Pos, (*Pos)->Last, Child);
 	     }
 	     
 	     *Index = (*Pos)->Last;
@@ -846,17 +893,14 @@ BTREE_EXPORT_NAME(Split_Node) (btree_t      *tree,
 		 Prev_Index = BTREE_EXPORT_NAME(Prev)(*Pos, Curr_Index);
 		 (*Pos)->Vals[Curr_Index] = (*Pos)->Vals[Prev_Index];
 		 if (Child != NULL) {
-		     (*Pos)->Children[Curr_Index]
-			 = (*Pos)->Children[Prev_Index];
-		     (*Pos)->Children[Curr_Index]->Parent_Index = Curr_Index;
+		     Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(*Pos, Prev_Index);
+		     BTREE_EXPORT_NAME(Set_Child)(*Pos, Curr_Index, Tmp_Node);
 		 }
 		 Curr_Index = Prev_Index;
 	     }
 	     (*Pos)->Vals[*Index] = Val;
 	     if (Child != NULL) {
-		 (*Pos)->Children[*Index] = Child;
-		 (*Pos)->Children[*Index]->Parent = (*Pos);
-		 (*Pos)->Children[*Index]->Parent_Index = *Index;
+		 BTREE_EXPORT_NAME(Set_Child)(*Pos, *Index, Child);
 	     }
          }
 
@@ -869,16 +913,13 @@ BTREE_EXPORT_NAME(Split_Node) (btree_t      *tree,
 	for (I=0; I<BTREE_NODE_SIZE/2; I++) {
             New_Node->Vals[I] = (*Pos)->Vals[Curr_Index];
             if (Child != NULL) {
-		New_Node->Children[I] = (*Pos)->Children[Curr_Index];
-		New_Node->Children[I]->Parent = New_Node;
-		New_Node->Children[I]->Parent_Index = I;
+		Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(*Pos, Curr_Index);
+		BTREE_EXPORT_NAME(Set_Child)(New_Node, I, Tmp_Node);
             }
             Curr_Index = BTREE_EXPORT_NAME(Next)(*Pos, Curr_Index);
 	}
 	if (Child != NULL) {
-            New_Node->Right_Child = Child;
-            New_Node->Right_Child->Parent = New_Node;
-            New_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+	    BTREE_EXPORT_NAME(Set_Right_Child)(New_Node, Child);
 	}
 	New_Node->First = 0;
 	New_Node->Last = (BTREE_NODE_SIZE/2) - 1;
@@ -892,9 +933,8 @@ BTREE_EXPORT_NAME(Split_Node) (btree_t      *tree,
 	while (Curr_Index != *Index) {
             New_Node->Vals[J] = (*Pos)->Vals[Curr_Index];
             if (Child != NULL) {
-		New_Node->Children[J] = (*Pos)->Children[Curr_Index];
-		New_Node->Children[J]->Parent = New_Node;
-		New_Node->Children[J]->Parent_Index = J;
+		Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(*Pos, Curr_Index);
+		BTREE_EXPORT_NAME(Set_Child)(New_Node, J, Tmp_Node);
             }
             Curr_Index = BTREE_EXPORT_NAME(Next)(*Pos, Curr_Index);
             J = J + 1;
@@ -902,26 +942,22 @@ BTREE_EXPORT_NAME(Split_Node) (btree_t      *tree,
 	New_Node->Vals[J] = Val;
 	*Index = J;
 	if (Child != NULL) {
-            New_Node->Children[J] = Child;
-            New_Node->Children[J]->Parent = New_Node;
-            New_Node->Children[J]->Parent_Index = J;
+	    BTREE_EXPORT_NAME(Set_Child)(New_Node, J, Child);
 	}
 	J = J + 1;
 	while (J < (BTREE_NODE_SIZE/2)) {
             New_Node->Vals[J] = (*Pos)->Vals[Curr_Index];
             if (Child != NULL) {
-		New_Node->Children[J] = (*Pos)->Children[Curr_Index];
-		New_Node->Children[J]->Parent = New_Node;
-		New_Node->Children[J]->Parent_Index = J;
+		Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(*Pos, Curr_Index);
+		BTREE_EXPORT_NAME(Set_Child)(New_Node, J, Tmp_Node);
             }
             Curr_Index = BTREE_EXPORT_NAME(Next)(*Pos, Curr_Index);
             J = J + 1;
 	}
 
 	if (Child != NULL) {
-            New_Node->Right_Child = (*Pos)->Children[Curr_Index];
-            New_Node->Right_Child->Parent = New_Node;
-            New_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+	    Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(*Pos, Curr_Index);
+	    BTREE_EXPORT_NAME(Set_Right_Child)(New_Node, Tmp_Node);
 	}
 	New_Node->First = 0;
 	New_Node->Last = (BTREE_NODE_SIZE/2) - 1;
@@ -954,7 +990,7 @@ BTREE_EXPORT_NAME(Insert_Into_Node) (btree_t      *tree,
     BTREE_EXPORT_NAME(btree_node_t) *Parent_Child = Child;
     BTREE_EXPORT_NAME(btree_node_t) *Parent;
     int          Parent_Index;
-    BTREE_EXPORT_NAME(btree_node_t) *Curr_Node = *Pos;
+    BTREE_EXPORT_NAME(btree_node_t) *Curr_Node = *Pos, *Tmp_Node;
     int          Work_Index = *Index;
     int          Curr_Index;
     int          Prev_Index;
@@ -969,9 +1005,8 @@ BTREE_EXPORT_NAME(Insert_Into_Node) (btree_t      *tree,
             if (Local_Rightmost) {
 		Curr_Node->Vals[Next_Index] = Parent_Val;
 		if (! Curr_Node->Leaf) {
-		    Curr_Node->Children[Next_Index] = Parent_Child;
-		    Curr_Node->Children[Next_Index]->Parent = Curr_Node;
-		    Curr_Node->Children[Next_Index]->Parent_Index = Next_Index;
+		    BTREE_EXPORT_NAME(Set_Child)(Curr_Node, Next_Index,
+						 Parent_Child);
 		}
 		if (*Pos == NULL) {
 		    *Pos = Curr_Node;
@@ -983,10 +1018,10 @@ BTREE_EXPORT_NAME(Insert_Into_Node) (btree_t      *tree,
 		while (Curr_Index != Work_Index) {
 		    Curr_Node->Vals[Curr_Index] = Curr_Node->Vals[Prev_Index];
 		    if (! Curr_Node->Leaf) {
-			Curr_Node->Children[Curr_Index]
-			    = Curr_Node->Children[Prev_Index];
-			Curr_Node->Children[Curr_Index]->Parent_Index
-			    = Curr_Index;
+			Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(Curr_Node,
+								Prev_Index);
+			BTREE_EXPORT_NAME(Set_Child)(Curr_Node, Curr_Index,
+						     Tmp_Node);
 		    }
 		    Curr_Index = Prev_Index;
 		    Prev_Index = BTREE_EXPORT_NAME(Prev)(Curr_Node,
@@ -994,9 +1029,8 @@ BTREE_EXPORT_NAME(Insert_Into_Node) (btree_t      *tree,
 		}
 		Curr_Node->Vals[Work_Index] = Parent_Val;
 		if (! Curr_Node->Leaf) {
-		    Curr_Node->Children[Work_Index] = Parent_Child;
-		    Curr_Node->Children[Work_Index]->Parent_Index = Work_Index;
-		    Curr_Node->Children[Work_Index]->Parent = Curr_Node;
+		    BTREE_EXPORT_NAME(Set_Child)(Curr_Node, Work_Index,
+						 Parent_Child);
 		}
 		*Index = Work_Index;
             }
@@ -1065,9 +1099,7 @@ BTREE_EXPORT_NAME(Insert_Into_Node) (btree_t      *tree,
 		    }
 		    Parent->Parent = NULL;
 
-		    Parent->Right_Child = Curr_Node;
-		    Parent->Right_Child->Parent = Parent;
-		    Parent->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+		    BTREE_EXPORT_NAME(Set_Right_Child)(Parent, Curr_Node);
 
 		    err = BTREE_EXPORT_NAME(Split_Node)(tree,
 				     &Curr_Node,
@@ -1093,9 +1125,7 @@ BTREE_EXPORT_NAME(Insert_Into_Node) (btree_t      *tree,
 			}
 		    }
 		    Parent->Vals[0] = Parent_Val;
-		    Parent->Children[0] = Parent_Child;
-		    Parent->Children[0]->Parent = Parent;
-		    Parent->Children[0]->Parent_Index = 0;
+		    BTREE_EXPORT_NAME(Set_Child)(Parent, 0, Parent_Child);
 		    tree->Root = Parent;
 		    Parent->First = 0;
 		    Parent->Last = 0;
@@ -1175,7 +1205,7 @@ BTREE_EXPORT_NAME(Local_Add) (btree_t      *tree,
 		     }
 		     break;
 		 } else {
-		     Pos = Pos->Children[Index];
+		     Pos = BTREE_EXPORT_NAME(Get_Child)(Pos, Index);
 		     Index = Pos->First;
 		 }
 	     } else if (Index == Pos->Last) {
@@ -1191,7 +1221,7 @@ BTREE_EXPORT_NAME(Local_Add) (btree_t      *tree,
 		     }
 		     break;
 		 } else {
-		     Pos = Pos->Right_Child;
+		     Pos = BTREE_EXPORT_NAME(Get_Right_Child)(Pos);
 		     Index = Pos->First;
 		 }
 	     } else {
@@ -1215,6 +1245,7 @@ BTREE_EXPORT_NAME(Delete_From_Node) (btree_t      *tree,
 		  BTREE_EXPORT_NAME(btree_node_t) *Pos,
 		  int          Index)
 {
+    BTREE_EXPORT_NAME(btree_node_t) *Tmp_Node;
     int Curr_Index;
     int Prev_Index;
 
@@ -1223,8 +1254,8 @@ BTREE_EXPORT_NAME(Delete_From_Node) (btree_t      *tree,
     while (Curr_Index != Pos->First) {
 	Pos->Vals[Curr_Index] = Pos->Vals[Prev_Index];
 	if (! Pos->Leaf) {
-            Pos->Children[Curr_Index] = Pos->Children[Prev_Index];
-            Pos->Children[Curr_Index]->Parent_Index = Curr_Index;
+	    Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(Pos, Prev_Index);
+	    BTREE_EXPORT_NAME(Set_Child)(Pos, Curr_Index, Tmp_Node);
 	}
 	Curr_Index = Prev_Index;
 	Prev_Index = BTREE_EXPORT_NAME(Prev)(Pos, Prev_Index);
@@ -1238,7 +1269,7 @@ BTREE_EXPORT_NAME(Delete_Shift_Left) (btree_t      *tree,
 		   BTREE_EXPORT_NAME(btree_node_t) **Next_Pos,
 		   int          *Next_Index)
 {
-    BTREE_EXPORT_NAME(btree_node_t) *Search_Node;
+    BTREE_EXPORT_NAME(btree_node_t) *Search_Node, *Tmp_Node;
     BTREE_EXPORT_NAME(btree_node_t) *Curr_Node = Pos;
     BTREE_EXPORT_NAME(btree_node_t) *Parent_Node;
 
@@ -1268,12 +1299,11 @@ BTREE_EXPORT_NAME(Delete_Shift_Left) (btree_t      *tree,
 	Parent_Node->Parent->Vals[(int) Parent_Node->Parent_Index]
 	    = Search_Node->Vals[(int) Search_Node->First];
 	if (! Curr_Node->Leaf) {
-            Curr_Node->Children[(int) Curr_Node->Last] = Curr_Node->Right_Child;
-            Curr_Node->Children[(int) Curr_Node->Last]->Parent_Index
-		= Curr_Node->Last;
-            Curr_Node->Right_Child = Search_Node->Children[(int) Search_Node->First];
-            Curr_Node->Right_Child->Parent = Curr_Node;
-            Curr_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+	    Tmp_Node = BTREE_EXPORT_NAME(Get_Right_Child)(Curr_Node);
+            BTREE_EXPORT_NAME(Set_Child)(Curr_Node, Curr_Node->Last, Tmp_Node);
+            Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(Search_Node,
+						    Search_Node->First);
+            BTREE_EXPORT_NAME(Set_Right_Child)(Curr_Node, Tmp_Node);
 	}
 	Search_Node->First = BTREE_EXPORT_NAME(Next)(Search_Node,
 						     Search_Node->First);
@@ -1293,7 +1323,7 @@ BTREE_EXPORT_NAME(Delete_Shift_Right) (btree_t      *tree,
 		    BTREE_EXPORT_NAME(btree_node_t) **Next_Pos,
 		    int          *Next_Index)
 {
-    BTREE_EXPORT_NAME(btree_node_t) *Search_Node;
+    BTREE_EXPORT_NAME(btree_node_t) *Search_Node, *Tmp_Node;
     BTREE_EXPORT_NAME(btree_node_t) *Curr_Node = Pos;
     BTREE_EXPORT_NAME(btree_node_t) *Parent_Node;
     int          Parent_Index;
@@ -1332,13 +1362,12 @@ BTREE_EXPORT_NAME(Delete_Shift_Right) (btree_t      *tree,
 	Parent_Node->Parent->Vals[Parent_Index]
 	    = Search_Node->Vals[(int) Search_Node->Last];
 	if (! Curr_Node->Leaf) {
-            Curr_Node->Children[(int) Curr_Node->First] = Search_Node->Right_Child;
-            Curr_Node->Children[(int) Curr_Node->First]->Parent = Curr_Node;
-            Curr_Node->Children[(int) Curr_Node->First]->Parent_Index
-		= Curr_Node->First;
-            Search_Node->Right_Child
-		= Search_Node->Children[(int) Search_Node->Last];
-            Search_Node->Right_Child->Parent_Index = BTREE_NODE_SIZE;
+	    Tmp_Node = BTREE_EXPORT_NAME(Get_Right_Child)(Search_Node);
+            BTREE_EXPORT_NAME(Set_Child)(Curr_Node, Curr_Node->First, Tmp_Node);
+
+	    Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(Search_Node,
+						    Search_Node->Last);
+            BTREE_EXPORT_NAME(Set_Right_Child)(Search_Node, Tmp_Node);
 	}
 	Search_Node->Last = BTREE_EXPORT_NAME(Prev)(Search_Node,
 						    Search_Node->Last);
@@ -1359,6 +1388,8 @@ BTREE_EXPORT_NAME(Combine_Nodes) (btree_t      *tree,
 	       BTREE_EXPORT_NAME(btree_node_t) **Next_Pos,
 	       int          *Next_Index)
 {
+    BTREE_EXPORT_NAME(btree_node_t) *Tmp_Node;
+
     Node2->First = BTREE_EXPORT_NAME(Prev)(Node2, Node2->First);
     if ((Node1->Parent == *Next_Pos)
 	&& (Node1->Parent_Index == *Next_Index))
@@ -1369,9 +1400,8 @@ BTREE_EXPORT_NAME(Combine_Nodes) (btree_t      *tree,
     Node2->Vals[(int) Node2->First]
 	= Node1->Parent->Vals[(int) Node1->Parent_Index];
     if (! Node1->Leaf) {
-	Node2->Children[(int) Node2->First] = Node1->Right_Child;
-	Node2->Children[(int) Node2->First]->Parent = Node2;
-	Node2->Children[(int) Node2->First]->Parent_Index = Node2->First;
+	Tmp_Node = BTREE_EXPORT_NAME(Get_Right_Child)(Node1);
+	BTREE_EXPORT_NAME(Set_Child)(Node2, Node2->First, Tmp_Node);
     }
 
     for (;;) {
@@ -1385,10 +1415,8 @@ BTREE_EXPORT_NAME(Combine_Nodes) (btree_t      *tree,
 	}
 	Node2->Vals[(int) Node2->First] = Node1->Vals[(int) Node1->Last];
 	if (! Node1->Leaf) {
-            Node2->Children[(int) Node2->First]
-		= Node1->Children[(int) Node1->Last];
-            Node2->Children[(int) Node2->First]->Parent = Node2;
-            Node2->Children[(int) Node2->First]->Parent_Index = Node2->First;
+	    Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(Node1, Node1->Last);
+            BTREE_EXPORT_NAME(Set_Child)(Node2, Node2->First, Tmp_Node);
 	}
 
 	if (Node1->Last == Node1->First) {
@@ -1421,9 +1449,9 @@ BTREE_EXPORT_NAME(Local_Delete) (btree_t      *tree,
     int          Local_Is_End;
 
     if (! Node->Leaf) {
-	Node = Node->Children[Curr_Index];
+	Node = BTREE_EXPORT_NAME(Get_Child)(Node, Curr_Index);
 	while (! Node->Leaf) {
-            Node = Node->Right_Child;
+            Node = BTREE_EXPORT_NAME(Get_Right_Child)(Node);
 	}
 	Curr_Index = Node->Last;
 	Pos->Vals[Index] = Node->Vals[Curr_Index];
@@ -1495,7 +1523,7 @@ BTREE_EXPORT_NAME(Local_Delete) (btree_t      *tree,
             if (Node == tree->Root) {
 		if (BTREE_EXPORT_NAME(Node_Count)(Node) == 1) {
 		    if (! Node->Leaf) {
-			tree->Root = Node->Right_Child;
+			tree->Root = BTREE_EXPORT_NAME(Get_Right_Child)(Node);
 			tree->Root->Parent = NULL;
 			tree->Root->Parent_Index = 0;
 			free(Node);
@@ -1512,10 +1540,12 @@ BTREE_EXPORT_NAME(Local_Delete) (btree_t      *tree,
 		    Next_Index = BTREE_EXPORT_NAME(Next)(Node->Parent,
 							 Node->Parent_Index);
 		    if (Node->Parent_Index == Node->Parent->Last) {
-			Combine_Right_Node = Node->Parent->Right_Child;
+			Combine_Right_Node
+			    = BTREE_EXPORT_NAME(Get_Right_Child)(Node->Parent);
 		    } else {
 			Combine_Right_Node
-			    = Node->Parent->Children[Next_Index];
+			    = BTREE_EXPORT_NAME(Get_Child)(Node->Parent,
+							   Next_Index);
 		    }
 		} else {
 		    Combine_Right_Node = Node;
@@ -1526,7 +1556,9 @@ BTREE_EXPORT_NAME(Local_Delete) (btree_t      *tree,
 			    = BTREE_EXPORT_NAME(Prev)(Node->Parent,
 						      Node->Parent_Index);
 		    }
-		    Combine_Left_Node = Node->Parent->Children[Prev_Index];
+		    Combine_Left_Node
+			= BTREE_EXPORT_NAME(Get_Child)(Node->Parent,
+						       Prev_Index);
 		}
 
 		BTREE_EXPORT_NAME(Delete_From_Node)(tree, Node, Curr_Index);
@@ -1760,19 +1792,29 @@ BTREE_EXPORT_NAME(free_node)(btree_t      *tree,
 	  BTREE_EXPORT_NAME(btree_node_t) *node)
 {
     int i;
+    BTREE_EXPORT_NAME(btree_node_t) *Tmp_Node;
 
     if (! node->Leaf) {
+	BTREE_EXPORT_NAME(btree_nleaf_t) *nl
+	    = BTREE_EXPORT_NAME(container_of_nleaf)(node);
+
 	for (i=node->First;
 	     i != node->Last;
 	     i=BTREE_EXPORT_NAME(Next)(node, i))
 	{
-	    BTREE_EXPORT_NAME(free_node)(tree, node->Children[i]);
+	    Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(node, i);
+	    BTREE_EXPORT_NAME(free_node)(tree, Tmp_Node);
 	}
-	BTREE_EXPORT_NAME(free_node)(tree, node->Children[i]);
-	BTREE_EXPORT_NAME(free_node)(tree, node->Right_Child);
+	Tmp_Node = BTREE_EXPORT_NAME(Get_Child)(node, i);
+	BTREE_EXPORT_NAME(free_node)(tree, Tmp_Node);
+	Tmp_Node = BTREE_EXPORT_NAME(Get_Right_Child)(node);
+	BTREE_EXPORT_NAME(free_node)(tree, Tmp_Node);
+	free(nl);
+    } else {
+	BTREE_EXPORT_NAME(btree_leaf_t) *l
+	    = BTREE_EXPORT_NAME(container_of_leaf)(node);
+	free(l);
     }
-
-    free(node);
 }
 
 BTREE_NAMES_LOCAL void
