@@ -1771,17 +1771,19 @@ static int
 read_elf32_ehdr(struct elfc *e)
 {
 	Elf32_Ehdr e32;
-	size_t l;
 	int rv;
 
-	/* Assumes e_ident is already read. */
-	l = sizeof(e32) - sizeof(e32.e_ident);
-	rv = read(e->fd, &e32.e_type, l);
+	/* Re-read e_ident. */
+	if (lseek(e->fd, 0, SEEK_SET) == -1) {
+		e->eerrno = errno;
+		return -1;
+	}
+	rv = read(e->fd, &e32, sizeof(e32));
 	if (rv == -1) {
 		e->eerrno = errno;
 		return -1;
 	}
-	if (rv != l) {
+	if (rv != sizeof(e32)) {
 		e->eerrno = EINVAL;
 		return -1;
 	}
@@ -1795,17 +1797,19 @@ static int
 read_elf64_ehdr(struct elfc *e)
 {
 	Elf64_Ehdr e64;
-	size_t l;
 	int rv;
 
-	/* Assumes e_ident is already read. */
-	l = sizeof(e64) - sizeof(e64.e_ident);
-	rv = read(e->fd, &e64.e_type, l);
+	/* Re-read e_ident. */
+	if (lseek(e->fd, 0, SEEK_SET) == -1) {
+		e->eerrno = errno;
+		return -1;
+	}
+	rv = read(e->fd, &e64, sizeof(e64));
 	if (rv == -1) {
 		e->eerrno = errno;
 		return -1;
 	}
-	if (rv != l) {
+	if (rv != sizeof(e64)) {
 		e->eerrno = EINVAL;
 		return -1;
 	}
