@@ -68,7 +68,7 @@ to compress it, probably a good idea as it will compress quite well.
 
 Before doing analysis, uncompress it if necessary and then run:
 
-  kdump-elftool tovelf -i pmcore -o vmcore
+  kdump-elftool tovelf -I kdump -i pmcore -o vmcore
 
 to generate the gdb-usable core file.
 
@@ -76,7 +76,7 @@ If your kernel use a randomized base, you need the original vmlinux
 file so kdump-elftool can calculate the offsets.  Use the following
 options to tovelf instead:
 
-  kdump-elftool tovelf -i pmcore -o vmcore -m vmlinux
+  kdump-elftool tovelf -I kdump -i pmcore -o vmcore -m vmlinux
 
 Then run:
 
