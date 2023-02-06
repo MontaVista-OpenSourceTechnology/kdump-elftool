@@ -555,26 +555,26 @@ btree_cmp_key_addr(struct page_range *val1, struct page_range *val2)
 	return 0;
 }
 
-#define BTREE_EXPORT_NAME(s) page_range_page_ ## s
+#define BEN(s) page_range_page_ ## s
 #define btree_t page_range_page_btree
 #define btree_cmp_key btree_cmp_key_page
 #define BTREE_NEEDS 0
 
 #include "btree.h"
 
-#undef BTREE_EXPORT_NAME
+#undef BEN
 #undef btree_t
 #undef btree_cmp_key
 #undef BTREE_NEEDS
 
-#define BTREE_EXPORT_NAME(s) page_range_addr_ ## s
+#define BEN(s) page_range_addr_ ## s
 #define btree_t page_range_addr_btree
 #define btree_cmp_key btree_cmp_key_addr
 #define BTREE_NEEDS (BTREE_NEEDS_FIRST | BTREE_NEEDS_DELETE)
 
 #include "btree.h"
 
-#undef BTREE_EXPORT_NAME
+#undef BEN
 #undef btree_t
 #undef btree_cmp_key
 #undef BTREE_NEEDS

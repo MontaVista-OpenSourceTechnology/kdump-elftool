@@ -80,7 +80,7 @@ struct qmem_info {
 #define BTREE_NODE_SIZE 10
 #define btree_val_t struct qmem_info
 #define btree_t qmem_btree_t
-#define BTREE_EXPORT_NAME(s) qmem_btree_ ## s
+#define BEN(s) qmem_btree_ ## s
 #define BTREE_NAMES_LOCAL static
 #define btree_cmp_key qmem_cmp_key
 
@@ -106,7 +106,7 @@ qmem_cmp_key(struct qmem_info val1, struct qmem_info val2)
 #undef BTREE_NODE_SIZE
 #undef btree_val_t
 #undef btree_t
-#undef BTREE_EXPORT_NAME
+#undef BEN
 #undef BTREE_NAMES_LOCAL
 #undef btree_cmp_key
 

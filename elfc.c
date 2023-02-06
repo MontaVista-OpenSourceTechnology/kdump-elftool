@@ -88,7 +88,7 @@ struct elfc_phdr {
 #define BTREE_NODE_SIZE 10
 #define btree_val_t struct elfc_phdr *
 #define BTREE_NAMES_LOCAL static
-#define BTREE_EXPORT_NAME(s) phdr_phys_ ## s
+#define BEN(s) phdr_phys_ ## s
 #define btree_t phdr_phys_btree
 #define btree_cmp_key phdr_phys_cmp
 #define BTREE_NEEDS BTREE_NEEDS_NEXT
@@ -105,7 +105,7 @@ phdr_phys_cmp(struct elfc_phdr *val1, struct elfc_phdr *val2)
 
 #include "btree.h"
 
-#undef BTREE_EXPORT_NAME
+#undef BEN
 #undef btree_t
 #undef btree_cmp_key
 #undef BTREE_NEEDS

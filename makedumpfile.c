@@ -49,7 +49,7 @@ struct mdf_addr_info {
 #define BTREE_NODE_SIZE 10
 #define btree_val_t struct mdf_addr_info
 #define btree_t mdf_btree_t
-#define BTREE_EXPORT_NAME(s) mdf_btree_ ## s
+#define BEN(s) mdf_btree_ ## s
 #define BTREE_NAMES_LOCAL static
 #define btree_cmp_key mdfmem_cmp_key
 
@@ -72,7 +72,7 @@ mdfmem_cmp_key(struct mdf_addr_info val1, struct mdf_addr_info val2)
 #undef BTREE_NODE_SIZE
 #undef btree_val_t
 #undef btree_t
-#undef BTREE_EXPORT_NAME
+#undef BEN
 #undef BTREE_NAMES_LOCAL
 #undef btree_cmp_key
 
