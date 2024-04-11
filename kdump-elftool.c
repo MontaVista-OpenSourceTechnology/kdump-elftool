@@ -2191,7 +2191,7 @@ topelf(int argc, char *argv[])
 		elfc_set_fd(d->elf, ofd);
 		rv = elfc_write(d->elf);
 		if (rv == -1) {
-			pr_err("Error writing elfc file: %s\n",
+			pr_err("Error writing elfc file %s: %s\n", outfile,
 				strerror(elfc_get_errno(d->elf)));
 			goto out_err;
 		}
@@ -2205,8 +2205,8 @@ topelf(int argc, char *argv[])
 	}
 	rv = elfc_setup(velf, elfc_gettype(d->elf));
 	if (rv == -1) {
-		pr_err("Error writing elfc file: %s\n",
-			strerror(elfc_get_errno(d->elf)));
+		pr_err("Error setting up new elfc file: %s\n",
+			strerror(elfc_get_errno(velf)));
 		goto out_err;
 	}
 	elfc_setmachine(velf, elfc_getmachine(d->elf));
@@ -2258,8 +2258,8 @@ topelf(int argc, char *argv[])
 
 	rv = elfc_write(velf);
 	if (rv == -1) {
-		pr_err("Error writing elfc file: %s\n",
-			strerror(elfc_get_errno(d->elf)));
+		pr_err("Error writing elfc file %s: %s\n", outfile,
+			strerror(elfc_get_errno(velf)));
 		goto out_err;
 	}
 
@@ -3021,6 +3021,8 @@ tovelf(int argc, char *argv[])
 				strerror(errno));
 			goto out_err;
 		}
+	} else {
+		outfile = "<stdout>";
 	}
 
 	velf = elfc_alloc();
@@ -3031,8 +3033,8 @@ tovelf(int argc, char *argv[])
 	d->velf = velf;
 	rv = elfc_setup(velf, elfc_gettype(d->elf));
 	if (rv == -1) {
-		pr_err("Error writing elfc file: %s\n",
-			strerror(elfc_get_errno(d->elf)));
+		pr_err("Error setting up new elfc file: %s\n",
+			strerror(elfc_get_errno(velf)));
 		goto out_err;
 	}
 	elfc_setmachine(velf, elfc_getmachine(d->elf));
@@ -3078,14 +3080,14 @@ tovelf(int argc, char *argv[])
 	if (vmlinux) {
 		rv = add_auxv(velf, vmlinux, vmci[VMCI_SYMBOL__stext].val);
 		if (rv == -1)
-			pr_err("Warning: Unable to add auxv: %s\n",
-				strerror(elfc_get_errno(d->elf)));
+			pr_err("Warning: Unable to add auxv to %s: %s\n",
+			       outfile, strerror(elfc_get_errno(velf)));
 	}
 
 	rv = elfc_write(velf);
 	if (rv == -1) {
-		pr_err("Error writing elfc file: %s\n",
-			strerror(elfc_get_errno(d->elf)));
+		pr_err("Error writing elfc file %s: %s\n", outfile,
+		       strerror(elfc_get_errno(velf)));
 		goto out_err;
 	}
 
