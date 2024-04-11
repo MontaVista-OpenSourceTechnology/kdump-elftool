@@ -1,4 +1,4 @@
-AC_INIT([kdump-elftool],[1.5.1],[minyard@mvista.com])
+AC_INIT([kdump-elftool],[1.5.2],[minyard@mvista.com])
 AM_INIT_AUTOMAKE([-Wall])
 AC_PROG_CC
 LT_INIT
