@@ -369,8 +369,8 @@ arm64_arch_setup(struct elfc *pelf, struct kdt_data *d, void **arch_data)
 		break;
 
 	default:
-		free(awd);
 		fprintf(stderr, "Invalid page size: %u\n", awd->page_size);
+		free(awd);
 		return -1;
 	}
 	

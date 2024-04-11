@@ -1810,9 +1810,9 @@ out_err:
 		if (qi->f)
 			fclose(qi->f);
 		qmem_btree_free(&qi->qmem);
-		free(qi);
 		if (qi->elf)
 			elfc_free(qi->elf);
+		free(qi);
 	} else {
 		if (qi->elf)
 			elfc_free(qi->elf);
