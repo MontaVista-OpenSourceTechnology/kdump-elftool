@@ -1641,15 +1641,19 @@ velf_do_write(struct elfc *e, int fd, GElf_Phdr *phdr, void *data,
 			errno = elfc_get_errno(d->elf);
 			goto out_err;
 		}
+	retry:
 		rv = write(fd, buf, buf_size);
-		if (rv == -1)
-			goto out_err;
-		if (rv != buf_size) {
-			errno = EINVAL;
+		if (rv < 0) {
+			if (errno == EINTR)
+				goto retry;
 			goto out_err;
 		}
-		size -= buf_size;
-		addr += buf_size;
+		if (rv == 0) {
+			errno = ENOSPC;
+			goto out_err;
+		}
+		size -= rv;
+		addr += rv;
 	}
 	free(buf);
 	return 0;
@@ -3331,8 +3335,11 @@ static int makedyn_one_exec(const char *file)
 		goto out_err;
 	}
 
+retry:
 	rv = write(fd, e_ident + EI_NIDENT, sizeof(type));
 	if (rv == -1) {
+		if (errno == EINTR)
+			goto retry;
 		pr_err("Unable to write to %s: %s\n", file,
 			strerror(errno));
 		goto out_err;
