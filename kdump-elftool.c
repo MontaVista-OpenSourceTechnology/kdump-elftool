@@ -1252,6 +1252,22 @@ read_flat_page_maps(struct kdt_data *d, struct vmcoreinfo_data *vmci)
 	return process_pglist(d, vmci[VMCI_SYMBOL_contig_page_data].val);
 }
 
+static uint64_t
+get_section_map_mask()
+{
+	uint64_t section_map_lst_bit;
+
+	if (os_major_release > 5 ||
+	    (os_major_release == 5 && os_minor_release >= 12))
+		section_map_lst_bit = 1ULL << 5;
+	else if (os_major_release == 5 && os_minor_release >= 3)
+		section_map_lst_bit = 1ULL << 4;
+	else
+		section_map_lst_bit = 1ULL << 3;
+
+	return ~(section_map_lst_bit - 1);
+}
+
 static int
 process_mem_section(struct kdt_data *d, uint64_t sectionnr,
 		    unsigned char *section)
@@ -1269,7 +1285,7 @@ process_mem_section(struct kdt_data *d, uint64_t sectionnr,
 	if (!(section_mem_map & SECTION_HAS_MEM_MAP))
 		return 0;
 
-	section_mem_map &= SECTION_MAP_MASK;
+	section_mem_map &= get_section_map_mask();
 
 	range = malloc(sizeof(*range));
 	if (!range) {

@@ -321,8 +321,6 @@ struct kdt_data {
 #define	SECTION_MARKED_PRESENT	(1ULL<<0)
 #define SECTION_HAS_MEM_MAP	(1ULL<<1)
 #define SECTION_IS_ONLINE	(1ULL<<2)
-#define SECTION_MAP_LAST_BIT	(1ULL<<3)
-#define SECTION_MAP_MASK	(~(SECTION_MAP_LAST_BIT-1))
 
 	/* Page ranges, sorted by PFN. */
 	struct page_range_page_btree_s *page_tree;
